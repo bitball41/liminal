@@ -34,7 +34,7 @@ function proxyNavigate(targetUrl) {
       console.warn('[liminal] Scramjet encodeUrl failed:', e);
     }
   }
-  setHint('⚠ Proxy not ready yet. Please wait a moment and try again.', true);
+  setHint('⚠ Proxy not ready — check the status hint above for which step is stuck.', true);
 }
 
 // ── Service worker & proxy init ───────────────────────────────────
@@ -56,22 +56,22 @@ async function initProxy() {
   }
 
   try {
-    // bare-mux is UMD — exposes window.BareMux as a global
+    setHint('[1/5] Loading transport…');
     await loadScript('/baremux/index.js');
 
-    // scramjet.bundle.js is ESM (exports ScramjetController) — use import()
+    setHint('[2/5] Loading proxy engine…');
     const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
 
-    // scramjet.all.js is the actual SW script (plain IIFE, not ESM)
-    await navigator.serviceWorker.register('/scramjet/scramjet.all.js', {
-      scope: '/scramjet/',
-    });
+    setHint('[3/5] Registering service worker…');
+    await navigator.serviceWorker.register('/scramjet/scramjet.all.js', { scope: '/scramjet/' });
     await navigator.serviceWorker.ready;
 
+    setHint('[4/5] Setting up network transport…');
     const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
     const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
     await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
 
+    setHint('[5/5] Starting controller…');
     const ctrl = new ScramjetController({
       prefix: '/scramjet/',
       files: {
@@ -82,9 +82,10 @@ async function initProxy() {
     });
     await ctrl.init();
     window.__liminalScramjet = ctrl;
+    clearHint();
   } catch (e) {
     console.warn('[liminal] Scramjet init failed:', e);
-    setHint('⚠ Proxy failed to initialise. Try refreshing.', true);
+    setHint('⚠ Init failed: ' + e.message, true);
   }
 }
 
