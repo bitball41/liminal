@@ -56,32 +56,33 @@ async function initProxy() {
   }
 
   try {
-    await loadScript('/scramjet/scramjet.bundle.js');
+    // bare-mux is UMD — loads fine as a plain script, exposes window.BareMux
     await loadScript('/baremux/index.js');
 
-    const swReg = await navigator.serviceWorker.register('/scramjet/scramjet.bundle.js', {
+    // scramjet.bundle.js is an ES module — must use import(), not <script src>
+    const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
+
+    // Register SW as a module worker (required for ESM SW)
+    await navigator.serviceWorker.register('/scramjet/scramjet.bundle.js', {
       scope: '/scramjet/',
+      type: 'module',
     });
     await navigator.serviceWorker.ready;
 
-    if (typeof BareMux !== 'undefined') {
-      const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-      const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-      await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-    }
+    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+    const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
+    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
 
-    if (typeof ScramjetController !== 'undefined') {
-      const ctrl = new ScramjetController({
-        prefix: '/scramjet/',
-        files: {
-          wasm: '/scramjet/scramjet.wasm.wasm',
-          all:  '/scramjet/scramjet.all.js',
-          sync: '/scramjet/scramjet.sync.js',
-        },
-      });
-      await ctrl.init();
-      window.__liminalScramjet = ctrl;
-    }
+    const ctrl = new ScramjetController({
+      prefix: '/scramjet/',
+      files: {
+        wasm: '/scramjet/scramjet.wasm.wasm',
+        all:  '/scramjet/scramjet.all.js',
+        sync: '/scramjet/scramjet.sync.js',
+      },
+    });
+    await ctrl.init();
+    window.__liminalScramjet = ctrl;
   } catch (e) {
     console.warn('[liminal] Scramjet init failed:', e);
     setHint('⚠ Proxy failed to initialise. Try refreshing.', true);
