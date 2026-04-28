@@ -1,16 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
-
-// ── Bare server ──────────────────────────────────────────────────
-let bareServer = null;
-try {
-  const { createBareServer } = require('@tomphttp/bare-server-node');
-  bareServer = createBareServer('/bare/');
-  console.log('  bare server: /bare/');
-} catch (e) {
-  console.warn('[liminal] bare-server-node unavailable:', e.message);
-}
+const { server: wispServer } = require('@mercuryworkshop/wisp-js');
 
 const app = express();
 
@@ -34,31 +25,15 @@ const bareMuxDist = path.join(
 app.use('/baremux/', express.static(bareMuxDist));
 console.log('  bare-mux:    /baremux/');
 
-// ── bare-as-module3 transport module (/bare-transport.mjs) ──────
-const bareTransportMjs = path.join(
-  __dirname, 'node_modules', '@mercuryworkshop', 'bare-as-module3', 'dist', 'index.mjs'
-);
-app.get('/bare-transport.mjs', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.sendFile(bareTransportMjs);
-});
-console.log('  bare-transport: /bare-transport.mjs');
-
 // ── Static public dir ────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── HTTP server (bare takes priority) ────────────────────────────
-const server = http.createServer((req, res) => {
-  if (bareServer && bareServer.shouldRoute(req)) {
-    bareServer.routeRequest(req, res);
-  } else {
-    app(req, res);
-  }
-});
+// ── HTTP server (wisp handles upgrades) ──────────────────────────
+const server = http.createServer(app);
 
 server.on('upgrade', (req, socket, head) => {
-  if (bareServer && bareServer.shouldRoute(req)) {
-    bareServer.routeUpgrade(req, socket, head);
+  if (req.url.startsWith('/wisp/')) {
+    wispServer.routeRequest(req, socket, head);
   } else {
     socket.destroy();
   }
@@ -67,4 +42,5 @@ server.on('upgrade', (req, socket, head) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`\n💤  Liminal Axis  →  http://localhost:${PORT}\n`);
+  console.log('  wisp:        /wisp/');
 });

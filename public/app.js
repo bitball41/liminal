@@ -66,7 +66,7 @@ async function initProxy() {
 
     if (typeof BareMux !== 'undefined') {
       const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-      await conn.setManualTransport('/bare-transport.mjs', ['/bare/']);
+      await conn.setTransport('/baremux/index.js', [{ wisp: `${location.origin.replace('http', 'ws')}/wisp/` }]);
     }
 
     if (typeof ScramjetController !== 'undefined') {
