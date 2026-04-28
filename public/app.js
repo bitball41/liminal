@@ -81,12 +81,13 @@ async function initProxy() {
 
     setHint('[4/4] Starting proxy engine…');
     const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
+    const origin = location.origin;
     const ctrl = new ScramjetController({
-      prefix: '/scramjet/',
+      prefix: origin + '/scramjet/',
       files: {
-        wasm: '/scramjet/scramjet.wasm.wasm',
-        all:  '/scramjet/scramjet.all.js',
-        sync: '/scramjet/scramjet.sync.js',
+        wasm: origin + '/scramjet/scramjet.wasm.wasm',
+        all:  origin + '/scramjet/scramjet.all.js',
+        sync: origin + '/scramjet/scramjet.sync.js',
       },
     });
     await ctrl.init();
