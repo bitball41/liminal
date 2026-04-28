@@ -1,6 +1,5 @@
 /* ── Liminal Axis — app.js ───────────────────────────────────────── */
 
-// ── DOM refs ──────────────────────────────────────────────────────
 const searchForm    = document.getElementById('searchForm');
 const searchInput   = document.getElementById('searchInput');
 const searchHint    = document.getElementById('searchHint');
@@ -8,7 +7,6 @@ const settingsBtn   = document.getElementById('settingsBtn');
 const modalBackdrop = document.getElementById('modalBackdrop');
 const modalClose    = document.getElementById('modalClose');
 
-// ── URL helpers ───────────────────────────────────────────────────
 function looksLikeUrl(s) {
   s = s.trim();
   if (/^https?:\/\//i.test(s)) return true;
@@ -23,22 +21,17 @@ function toAbsoluteUrl(s) {
   return 'https://duckduckgo.com/?q=' + encodeURIComponent(s);
 }
 
-// ── Proxy navigation ──────────────────────────────────────────────
 function proxyNavigate(targetUrl) {
   const ctrl = window.__liminalScramjet;
   if (ctrl) {
-    try {
-      window.location.href = ctrl.encodeUrl(targetUrl);
-      return;
-    } catch (e) {
-      console.warn('[liminal] Scramjet encodeUrl failed:', e);
-    }
+    window.location.href = ctrl.encodeUrl(targetUrl);
+  } else {
+    setHint('⚠ Proxy not ready yet — check hint below for status.', true);
   }
-  setHint('⚠ Proxy not ready — check the status hint above for which step is stuck.', true);
 }
 
-// ── Service worker & proxy init ───────────────────────────────────
-async function loadScript(src) {
+// ── Load a classic (non-module) script ───────────────────────────
+function loadScript(src) {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
     const s = document.createElement('script');
@@ -49,44 +42,45 @@ async function loadScript(src) {
   });
 }
 
+// ── Proxy init ────────────────────────────────────────────────────
 async function initProxy() {
   if (!('serviceWorker' in navigator)) {
-    setHint('⚠ Service workers not supported in this browser.', true);
+    setHint('⚠ Service workers not supported.', true);
     return;
   }
 
   try {
-    setHint('[1/5] Loading transport…');
+    setHint('[1/4] Loading transport…');
     await loadScript('/baremux/index.js');
 
-    setHint('[2/5] Loading proxy engine…');
-    const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
+    setHint('[2/4] Registering service worker…');
+    // Unregister any stale SWs from previous visits
+    const old = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(old.map(r => r.unregister()));
 
-    setHint('[3/5] Registering service worker…');
-    // Clear any stale/broken SW registrations from previous attempts
-    const oldRegs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(oldRegs.map(r => r.unregister()));
+    // Register our wrapper SW (adds skipWaiting + clients.claim)
+    const reg = await navigator.serviceWorker.register('/scramjet-sw.js', {
+      scope: '/scramjet/',
+    });
 
-    const swReg = await navigator.serviceWorker.register('/scramjet-sw.js', { scope: '/scramjet/' });
-
-    // Wait for this specific SW to activate (with timeout for diagnostics)
+    // Wait for this specific SW to activate
     await new Promise((resolve, reject) => {
-      if (swReg.active) { resolve(); return; }
-      const sw = swReg.installing || swReg.waiting;
-      if (!sw) { reject(new Error('SW not installing after register')); return; }
-      const t = setTimeout(() => reject(new Error('SW install timed out after 10s')), 10000);
+      if (reg.active) { resolve(); return; }
+      const sw = reg.installing || reg.waiting;
+      if (!sw) { reject(new Error('SW not installing')); return; }
+      const t = setTimeout(() => reject(new Error('SW timed out')), 10000);
       sw.addEventListener('statechange', function () {
         if (this.state === 'activated') { clearTimeout(t); resolve(); }
-        if (this.state === 'redundant') { clearTimeout(t); reject(new Error('SW install failed (redundant)')); }
+        if (this.state === 'redundant') { clearTimeout(t); reject(new Error('SW install failed')); }
       });
     });
 
-    setHint('[4/5] Setting up network transport…');
-    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+    setHint('[3/4] Configuring transport…');
     const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+    await conn.setManualTransport('/bare-transport.mjs', ['/bare/']);
 
-    setHint('[5/5] Starting controller…');
+    setHint('[4/4] Starting proxy engine…');
+    const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
     const ctrl = new ScramjetController({
       prefix: '/scramjet/',
       files: {
@@ -99,12 +93,12 @@ async function initProxy() {
     window.__liminalScramjet = ctrl;
     clearHint();
   } catch (e) {
-    console.warn('[liminal] Scramjet init failed:', e);
+    console.error('[liminal] init failed:', e);
     setHint('⚠ Init failed: ' + e.message, true);
   }
 }
 
-// ── Search form ───────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────
 searchForm.addEventListener('submit', e => {
   e.preventDefault();
   const val = searchInput.value.trim();
@@ -115,11 +109,10 @@ searchForm.addEventListener('submit', e => {
 searchInput.addEventListener('input', () => {
   const val = searchInput.value.trim();
   if (!val) { clearHint(); return; }
-  if (looksLikeUrl(val)) {
-    setHint('→ Proxy: ' + (val.startsWith('http') ? val : 'https://' + val));
-  } else {
-    setHint('→ DuckDuckGo: "' + val + '"');
-  }
+  setHint(looksLikeUrl(val)
+    ? '→ Proxy: ' + (val.startsWith('http') ? val : 'https://' + val)
+    : '→ DuckDuckGo: "' + val + '"'
+  );
 });
 
 document.addEventListener('keydown', e => {
@@ -130,9 +123,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
 
-document.querySelectorAll('.quick-btn').forEach(btn => {
-  btn.addEventListener('click', () => proxyNavigate(btn.dataset.url));
-});
+document.querySelectorAll('.quick-btn').forEach(btn =>
+  btn.addEventListener('click', () => proxyNavigate(btn.dataset.url))
+);
 
 function setHint(msg, warn = false) {
   searchHint.textContent = msg;
@@ -144,81 +137,51 @@ function clearHint() {
 }
 
 // ── Settings modal ────────────────────────────────────────────────
-function openModal() {
-  modalBackdrop.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-function closeModal() {
-  modalBackdrop.classList.remove('open');
-  document.body.style.overflow = '';
-}
+function openModal()  { modalBackdrop.classList.add('open');    document.body.style.overflow = 'hidden'; }
+function closeModal() { modalBackdrop.classList.remove('open'); document.body.style.overflow = ''; }
 
 settingsBtn.addEventListener('click', openModal);
 modalClose.addEventListener('click', closeModal);
-modalBackdrop.addEventListener('click', e => {
-  if (e.target === modalBackdrop) closeModal();
-});
+modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
 
-// ── Starfield canvas ──────────────────────────────────────────────
-(function starfield() {
+// ── Starfield ─────────────────────────────────────────────────────
+(function () {
   const canvas = document.getElementById('starfield');
-  const ctx    = canvas.getContext('2d');
-  const COUNT  = 200;
-  let stars    = [];
+  const ctx = canvas.getContext('2d');
+  const COUNT = 200;
+  let stars = [];
 
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
   function mkStar() {
     return {
-      x:  Math.random() * canvas.width,
-      y:  Math.random() * canvas.height,
-      r:  Math.random() * 1.4 + 0.15,
-      o:  Math.random() * 0.65 + 0.1,
-      vy: Math.random() * 0.25 + 0.04,
-      tw: Math.random() * Math.PI * 2,
+      x: Math.random() * canvas.width,  y: Math.random() * canvas.height,
+      r: Math.random() * 1.4 + 0.15,    o: Math.random() * 0.65 + 0.1,
+      vy: Math.random() * 0.25 + 0.04,  tw: Math.random() * Math.PI * 2,
       ts: Math.random() * 0.018 + 0.004,
     };
   }
-
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const s of stars) {
       s.tw += s.ts;
       const o = s.o * (0.55 + 0.45 * Math.sin(s.tw));
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(215,195,255,${o})`;
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(215,195,255,${o})`; ctx.fill();
       if (s.r > 1) {
-        const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 3);
-        grad.addColorStop(0, `rgba(200,170,255,${o * .3})`);
-        grad.addColorStop(1, 'transparent');
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r * 3, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
+        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 3);
+        g.addColorStop(0, `rgba(200,170,255,${o * .3})`); g.addColorStop(1, 'transparent');
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 3, 0, Math.PI * 2);
+        ctx.fillStyle = g; ctx.fill();
       }
       s.y += s.vy;
-      if (s.y > canvas.height + 2) {
-        s.y = -2;
-        s.x = Math.random() * canvas.width;
-      }
+      if (s.y > canvas.height + 2) { s.y = -2; s.x = Math.random() * canvas.width; }
     }
     requestAnimationFrame(draw);
   }
-
-  window.addEventListener('resize', () => {
-    resize();
-    stars = Array.from({ length: COUNT }, mkStar);
-  });
-  resize();
-  stars = Array.from({ length: COUNT }, mkStar);
-  draw();
+  window.addEventListener('resize', () => { resize(); stars = Array.from({ length: COUNT }, mkStar); });
+  resize(); stars = Array.from({ length: COUNT }, mkStar); draw();
 })();
 
-// ── Init ──────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────────
 initProxy();
 window.addEventListener('load', () => searchInput.focus());
