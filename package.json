@@ -1,0 +1,20 @@
+{
+  "name": "liminal-axis",
+  "version": "1.0.0",
+  "description": "Liminal Axis — a sleek web proxy powered by Scramjet and Ultraviolet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@mercuryworkshop/bare-as-module3": "^2.2.5",
+    "@mercuryworkshop/bare-mux": "^2.1.9",
+    "@mercuryworkshop/scramjet": "^1.1.0",
+    "@tomphttp/bare-server-node": "^2.0.3",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
