@@ -26,11 +26,10 @@ function proxyNavigate(targetUrl) {
   if (ctrl) {
     window.location.href = ctrl.encodeUrl(targetUrl);
   } else {
-    setHint('⚠ Proxy not ready yet — check hint below for status.', true);
+    setHint('⚠ Proxy not ready yet — check status below.', true);
   }
 }
 
-// ── Load a classic (non-module) script ───────────────────────────
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -50,36 +49,35 @@ async function initProxy() {
   }
 
   try {
-    setHint('[1/4] Loading transport…');
+    setHint('[1/3] Loading transport…');
     await loadScript('/baremux/index.js');
 
-    setHint('[2/4] Registering service worker…');
-    // Unregister any stale SWs from previous visits
-    const old = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(old.map(r => r.unregister()));
+    setHint('[2/3] Setting up service worker…');
 
-    // Register our wrapper SW (adds skipWaiting + clients.claim)
-    const reg = await navigator.serviceWorker.register('/scramjet-sw.js', {
-      scope: '/scramjet/',
-    });
+    // Reuse the existing SW if it's already active — avoids full WASM reload on every visit
+    let reg = await navigator.serviceWorker.getRegistration('/scramjet/');
+    if (!reg || !reg.active) {
+      // Clear any stale SWs before registering
+      const stale = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(stale.map(r => r.unregister()));
 
-    // Wait for this specific SW to activate
-    await new Promise((resolve, reject) => {
-      if (reg.active) { resolve(); return; }
-      const sw = reg.installing || reg.waiting;
-      if (!sw) { reject(new Error('SW not installing')); return; }
-      const t = setTimeout(() => reject(new Error('SW timed out')), 10000);
-      sw.addEventListener('statechange', function () {
-        if (this.state === 'activated') { clearTimeout(t); resolve(); }
-        if (this.state === 'redundant') { clearTimeout(t); reject(new Error('SW install failed')); }
+      reg = await navigator.serviceWorker.register('/scramjet-sw.js', { scope: '/scramjet/' });
+      await new Promise((resolve, reject) => {
+        if (reg.active) { resolve(); return; }
+        const sw = reg.installing || reg.waiting;
+        if (!sw) { reject(new Error('SW not installing')); return; }
+        const t = setTimeout(() => reject(new Error('SW timed out')), 15000);
+        sw.addEventListener('statechange', function () {
+          if (this.state === 'activated') { clearTimeout(t); resolve(); }
+          if (this.state === 'redundant') { clearTimeout(t); reject(new Error('SW install failed')); }
+        });
       });
-    });
+    }
 
-    setHint('[3/4] Configuring transport…');
+    setHint('[3/3] Starting proxy engine…');
     const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
     await conn.setTransport('/bare-transport.mjs', [location.origin + '/bare/']);
 
-    setHint('[4/4] Starting proxy engine…');
     const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
     const ctrl = new ScramjetController({
       prefix: '/scramjet/',
@@ -143,44 +141,6 @@ function closeModal() { modalBackdrop.classList.remove('open'); document.body.st
 settingsBtn.addEventListener('click', openModal);
 modalClose.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
-
-// ── Starfield ─────────────────────────────────────────────────────
-(function () {
-  const canvas = document.getElementById('starfield');
-  const ctx = canvas.getContext('2d');
-  const COUNT = 200;
-  let stars = [];
-
-  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-  function mkStar() {
-    return {
-      x: Math.random() * canvas.width,  y: Math.random() * canvas.height,
-      r: Math.random() * 1.4 + 0.15,    o: Math.random() * 0.65 + 0.1,
-      vy: Math.random() * 0.25 + 0.04,  tw: Math.random() * Math.PI * 2,
-      ts: Math.random() * 0.018 + 0.004,
-    };
-  }
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const s of stars) {
-      s.tw += s.ts;
-      const o = s.o * (0.55 + 0.45 * Math.sin(s.tw));
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(215,195,255,${o})`; ctx.fill();
-      if (s.r > 1) {
-        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 3);
-        g.addColorStop(0, `rgba(200,170,255,${o * .3})`); g.addColorStop(1, 'transparent');
-        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 3, 0, Math.PI * 2);
-        ctx.fillStyle = g; ctx.fill();
-      }
-      s.y += s.vy;
-      if (s.y > canvas.height + 2) { s.y = -2; s.x = Math.random() * canvas.width; }
-    }
-    requestAnimationFrame(draw);
-  }
-  window.addEventListener('resize', () => { resize(); stars = Array.from({ length: COUNT }, mkStar); });
-  resize(); stars = Array.from({ length: COUNT }, mkStar); draw();
-})();
 
 // ── Boot ──────────────────────────────────────────────────────────
 initProxy();
