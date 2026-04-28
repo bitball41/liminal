@@ -77,7 +77,7 @@ async function initProxy() {
 
     setHint('[3/4] Configuring transport…');
     const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-    await conn.setManualTransport('/bare-transport.mjs', ['/bare/']);
+    await conn.setTransport('/bare-transport.mjs', ['/bare/']);
 
     setHint('[4/4] Starting proxy engine…');
     const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
