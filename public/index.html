@@ -3,29 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>💤 Liminal Axis</title>
+  <title>Liminal Axis</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💤</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="modulepreload" href="/scramjet/scramjet.bundle.js">
+  <link rel="preload" href="/baremux/index.js" as="script">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Animated background -->
-  <canvas id="starfield"></canvas>
-  <div class="nebula nebula-1"></div>
-  <div class="nebula nebula-2"></div>
-  <div class="nebula nebula-3"></div>
-
   <!-- Header -->
   <header class="header">
     <div class="header-brand">
-      <span class="header-zzz">💤</span>
       <span class="header-name">Liminal Axis</span>
     </div>
     <button class="btn-icon" id="settingsBtn" aria-label="Open settings" title="Settings">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
         <circle cx="12" cy="12" r="3"/>
       </svg>
@@ -35,11 +30,9 @@
   <!-- Main -->
   <main class="main">
     <div class="hero">
-      <div class="hero-glow"></div>
 
       <!-- Branding -->
       <div class="brand-block">
-        <div class="zzz-emoji">💤</div>
         <h1 class="brand-name">Liminal Axis</h1>
         <p class="brand-tagline">Step through. Browse freely.</p>
       </div>
@@ -63,8 +56,7 @@
             aria-label="Search or enter URL"
           >
           <button type="submit" class="go-btn" aria-label="Go">
-            <span>Go</span>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
           </button>
@@ -74,7 +66,6 @@
 
       <!-- Quick links -->
       <div class="quick-row">
-        <span class="quick-label">Quick:</span>
         <button class="quick-btn" data-url="https://youtube.com">YouTube</button>
         <button class="quick-btn" data-url="https://reddit.com">Reddit</button>
         <button class="quick-btn" data-url="https://x.com">X</button>
@@ -94,13 +85,7 @@
   <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal" id="modal">
       <div class="modal-header">
-        <h2 class="modal-title" id="modalTitle">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          Settings
-        </h2>
+        <h2 class="modal-title" id="modalTitle">Settings</h2>
         <button class="btn-icon" id="modalClose" aria-label="Close settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <path d="M18 6 6 18M6 6l12 12"/>
@@ -134,7 +119,6 @@
         <section class="setting-section">
           <div class="setting-label">About</div>
           <div class="about-card">
-            <span class="about-zzz">💤</span>
             <div class="about-text">
               <strong>Liminal Axis</strong> is an open web proxy.<br>
               Powered by <a class="link" href="https://github.com/MercuryWorkshop/scramjet" target="_blank" rel="noopener">Scramjet</a>.
