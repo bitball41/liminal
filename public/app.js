@@ -56,16 +56,15 @@ async function initProxy() {
   }
 
   try {
-    // bare-mux is UMD — loads fine as a plain script, exposes window.BareMux
+    // bare-mux is UMD — exposes window.BareMux as a global
     await loadScript('/baremux/index.js');
 
-    // scramjet.bundle.js is an ES module — must use import(), not <script src>
+    // scramjet.bundle.js is ESM (exports ScramjetController) — use import()
     const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
 
-    // Register SW as a module worker (required for ESM SW)
-    await navigator.serviceWorker.register('/scramjet/scramjet.bundle.js', {
+    // scramjet.all.js is the actual SW script (plain IIFE, not ESM)
+    await navigator.serviceWorker.register('/scramjet/scramjet.all.js', {
       scope: '/scramjet/',
-      type: 'module',
     });
     await navigator.serviceWorker.ready;
 
