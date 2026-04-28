@@ -32,6 +32,11 @@ const epoxyDist = path.join(
 app.use('/epoxy/', express.static(epoxyDist));
 console.log('  epoxy:       /epoxy/');
 
+// ── SW wrapper (needs Service-Worker-Allowed header) ─────────────
+app.get('/scramjet-sw.js', allowSW, (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'scramjet-sw.js'))
+);
+
 // ── Static public dir ────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 

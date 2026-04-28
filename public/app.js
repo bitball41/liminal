@@ -67,7 +67,7 @@ async function initProxy() {
     const oldRegs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(oldRegs.map(r => r.unregister()));
 
-    const swReg = await navigator.serviceWorker.register('/scramjet/scramjet.all.js', { scope: '/scramjet/' });
+    const swReg = await navigator.serviceWorker.register('/scramjet-sw.js', { scope: '/scramjet/' });
 
     // Wait for this specific SW to activate (with timeout for diagnostics)
     await new Promise((resolve, reject) => {
