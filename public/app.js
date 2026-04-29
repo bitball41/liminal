@@ -7,6 +7,11 @@ const settingsBtn   = document.getElementById('settingsBtn');
 const modalBackdrop = document.getElementById('modalBackdrop');
 const modalClose    = document.getElementById('modalClose');
 
+// BareMux connection at module scope so the SharedWorker persists
+const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
+
+const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
+
 function looksLikeUrl(s) {
   s = s.trim();
   if (/^https?:\/\//i.test(s)) return true;
@@ -30,14 +35,13 @@ function proxyNavigate(targetUrl) {
   }
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload  = resolve;
-    s.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(s);
+function checkWisp(url) {
+  return new Promise(resolve => {
+    const ws = new WebSocket(url);
+    const done = (ok) => { clearTimeout(timer); try { ws.close(); } catch (_) {} resolve(ok); };
+    const timer = setTimeout(() => done(false), 2000);
+    ws.addEventListener('open',  () => done(true));
+    ws.addEventListener('error', () => done(false));
   });
 }
 
@@ -49,36 +53,17 @@ async function initProxy() {
   }
 
   try {
-    setHint('[1/3] Loading transport…');
-    await loadScript('/baremux/index.js');
+    setHint('[1/3] Registering service worker…');
+    navigator.serviceWorker.register('/scramjet-sw.js', { scope: '/scramjet/' });
+    await navigator.serviceWorker.ready;
 
-    setHint('[2/3] Setting up service worker…');
-
-    // Reuse the existing SW if it's already active — avoids full WASM reload on every visit
-    let reg = await navigator.serviceWorker.getRegistration('/scramjet/');
-    if (!reg || !reg.active) {
-      // Clear any stale SWs before registering
-      const stale = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(stale.map(r => r.unregister()));
-
-      reg = await navigator.serviceWorker.register('/scramjet-sw.js', { scope: '/scramjet/' });
-      await new Promise((resolve, reject) => {
-        if (reg.active) { resolve(); return; }
-        const sw = reg.installing || reg.waiting;
-        if (!sw) { reject(new Error('SW not installing')); return; }
-        const t = setTimeout(() => reject(new Error('SW timed out')), 15000);
-        sw.addEventListener('statechange', function () {
-          if (this.state === 'activated') { clearTimeout(t); resolve(); }
-          if (this.state === 'redundant') { clearTimeout(t); reject(new Error('SW install failed')); }
-        });
-      });
-    }
+    setHint('[2/3] Setting up transport…');
+    const localWisp = `wss://${location.host}/wisp/`;
+    const wispUrl = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
+    await conn.setTransport('/epoxy/index.mjs', [{ websocket: wispUrl }]);
 
     setHint('[3/3] Starting proxy engine…');
-    const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-    await conn.setTransport('/bare-transport.mjs', [location.origin + '/bare/']);
-
-    const { ScramjetController } = await import('/scramjet/scramjet.bundle.js');
+    const { ScramjetController } = $scramjetLoadController();
     const ctrl = new ScramjetController({
       prefix: '/scramjet/',
       files: {

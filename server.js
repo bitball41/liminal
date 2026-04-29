@@ -1,17 +1,15 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
-const { createBareServer } = require('@tomphttp/bare-server-node');
+const { server: wisp } = require('@mercuryworkshop/wisp-js/server');
 
 const app = express();
-const bareServer = createBareServer('/bare/');
 
 function allowSW(req, res, next) {
   res.setHeader('Service-Worker-Allowed', '/');
   next();
 }
 
-// Long-lived cache for vendored proxy assets — they don't change between visits
 const vendorCache = { maxAge: '7d', immutable: true };
 
 // Scramjet dist files
@@ -26,12 +24,12 @@ app.use('/baremux/', express.static(
   vendorCache
 ));
 
-// bare-as-module3 transport
-app.get('/bare-transport.mjs', (req, res) => {
+// epoxy transport (WISP client)
+app.get('/epoxy/index.mjs', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
   res.sendFile(path.join(
-    __dirname, 'node_modules', '@mercuryworkshop', 'bare-as-module3', 'dist', 'index.mjs'
+    __dirname, 'node_modules', '@mercuryworkshop', 'epoxy-transport', 'dist', 'index.mjs'
   ));
 });
 
@@ -42,20 +40,10 @@ app.get('/scramjet-sw.js', allowSW, (req, res) =>
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const server = http.createServer((req, res) => {
-  if (bareServer.shouldRoute(req)) {
-    bareServer.routeRequest(req, res);
-  } else {
-    app(req, res);
-  }
-});
+const server = http.createServer(app);
 
 server.on('upgrade', (req, socket, head) => {
-  if (bareServer.shouldRoute(req)) {
-    bareServer.routeUpgrade(req, socket, head);
-  } else {
-    socket.destroy();
-  }
+  wisp.routeRequest(req, socket, head);
 });
 
 const PORT = process.env.PORT || 8080;
