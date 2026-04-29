@@ -2,7 +2,7 @@
 
 const $ = id => document.getElementById(id);
 
-const chrome      = $('chrome');
+const nav         = $('chrome');
 const btnBack     = $('btn-back');
 const btnFwd      = $('btn-fwd');
 const btnReload   = $('btn-reload');
