@@ -20,7 +20,16 @@ const faviconEl     = $('favicon');
 const DEFAULT_FAVICON = faviconEl.href;
 
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
+
+// Ordered list of WISP servers to try. Local is always first (dynamic).
+const WISP_FALLBACKS = [
+  'wss://wisp.mercurywork.shop/wisp/',
+  'wss://wisp.eduu.eu.org/wisp/',
+  'wss://wisp.fn.nadeko.net/wisp/',
+];
+
+let activeWispUrl  = null;
+let transportReady = false;
 
 let axisFrame = null;
 let browsing  = false;
@@ -61,7 +70,12 @@ function showNewTab() {
 }
 
 // ── Navigation ────────────────────────────────────────────────────
-function navigate(url) {
+async function navigate(url) {
+  if (!transportReady) {
+    setStatus('Reconnecting…');
+    const ok = await reinitTransport();
+    if (!ok) { setStatus('⚠ Transport failed. Click reload to retry.', true); return; }
+  }
   const ctrl = window.__axisCtrl;
   if (!ctrl) { setStatus('⚠ Proxy not ready.', true); return; }
 
@@ -105,9 +119,15 @@ btnFwd.addEventListener('click', () => {
   }
 });
 
-btnReload.addEventListener('click', () => {
-  if (browsing) axisFrame?.reload();
-  else initProxy();
+btnReload.addEventListener('click', async () => {
+  if (!transportReady) {
+    await reinitTransport();
+    if (browsing && transportReady) axisFrame?.reload();
+  } else if (browsing) {
+    axisFrame?.reload();
+  } else {
+    initProxy();
+  }
 });
 
 btnHome.addEventListener('click', showNewTab);
@@ -236,7 +256,7 @@ function initSettings() {
   }
 }
 
-// ── WISP check ────────────────────────────────────────────────────
+// ── WISP helpers ─────────────────────────────────────────────────
 function checkWisp(url) {
   return new Promise(resolve => {
     const ws = new WebSocket(url);
@@ -245,6 +265,45 @@ function checkWisp(url) {
     ws.addEventListener('open',  () => done(true));
     ws.addEventListener('error', () => done(false));
   });
+}
+
+async function pickWisp() {
+  const local = `wss://${location.host}/wisp/`;
+  if (await checkWisp(local)) return local;
+  for (const url of WISP_FALLBACKS) {
+    if (await checkWisp(url)) return url;
+  }
+  return null;
+}
+
+async function setTransport(wispUrl) {
+  try {
+    await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
+    return 'libcurl';
+  } catch {
+    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+    return 'epoxy';
+  }
+}
+
+// Re-establish WISP + transport without re-registering the service worker.
+async function reinitTransport() {
+  transportReady = false;
+  try {
+    setStatus('Finding WISP server…');
+    const wispUrl = await pickWisp();
+    if (!wispUrl) throw new Error('No reachable WISP server found.');
+    activeWispUrl = wispUrl;
+    const transport = await setTransport(wispUrl);
+    setStatus(`Reconnected (${transport})`);
+    transportReady = true;
+    setTimeout(() => { if (statusEl.textContent.startsWith('Reconnected')) setStatus(''); }, 2000);
+    return true;
+  } catch (e) {
+    console.error('[axis] transport reinit failed:', e);
+    setStatus('⚠ ' + e.message, true);
+    return false;
+  }
 }
 
 // ── Proxy init ────────────────────────────────────────────────────
@@ -268,17 +327,13 @@ async function initProxy() {
       });
     });
 
-    setStatus('Setting up transport…');
-    const localWisp = `wss://${location.host}/wisp/`;
-    const wispUrl   = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
+    setStatus('Finding WISP server…');
+    const wispUrl = await pickWisp();
+    if (!wispUrl) throw new Error('No reachable WISP server. Check your connection.');
+    activeWispUrl = wispUrl;
 
-    try {
-      await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: libcurl');
-    } catch {
-      await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: epoxy');
-    }
+    const transport = await setTransport(wispUrl);
+    setStatus(`Transport: ${transport}`);
 
     setStatus('Starting proxy engine…');
     const { ScramjetController } = $scramjetLoadController();
@@ -292,7 +347,16 @@ async function initProxy() {
     });
     await ctrl.init();
     window.__axisCtrl = ctrl;
+    transportReady = true;
     setStatus('');
+
+    // Detect when the mux dies and mark transport as needing reconnect.
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'wisp-error') {
+        transportReady = false;
+        setStatus('⚠ Connection lost — click reload to reconnect.', true);
+      }
+    });
   } catch (e) {
     console.error('[axis] init failed:', e);
     setStatus('⚠ ' + e.message, true);
