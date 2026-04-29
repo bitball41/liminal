@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: EC2 + CloudFront
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 1. Push code to EC2 and restart the server ─────────────────
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR="${{ secrets.EC2_APP_DIR }}"
+            APP_DIR="${APP_DIR:-/var/www/liminal}"
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --omit=dev
+            pm2 restart axis || pm2 start server.js --name axis
+            pm2 save
+
+      # ── 2. Bust the CloudFront cache ───────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"
