@@ -104,6 +104,12 @@ async function initProxy() {
   }
 
   try {
+    // Wipe any stale/corrupted IDB so ctrl.init() always creates stores fresh
+    await new Promise(resolve => {
+      const req = indexedDB.deleteDatabase('$scramjet');
+      req.onsuccess = req.onerror = () => resolve();
+    });
+
     setStatus('Registering service worker…');
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/scramjet/' });
 
@@ -115,6 +121,12 @@ async function initProxy() {
         if (this.state === 'activated') resolve();
         if (this.state === 'redundant')  reject(new Error('Service worker install failed'));
       });
+    });
+
+    // Check for SW updates every 30 min and on tab focus
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
     });
 
     setStatus('Setting up transport…');
@@ -155,5 +167,12 @@ function setStatus(msg, warn = false) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────
+// Auto-update: reload when an existing SW is replaced by a newer one.
+// prevController is null on first install, so we skip the reload then.
+const prevController = navigator.serviceWorker?.controller ?? null;
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (prevController) window.location.reload();
+});
+
 initProxy();
 window.addEventListener('load', () => searchInput.focus());
