@@ -199,6 +199,31 @@ html, body {
   50%      { opacity: .35; }
 }
 
+/* ── Proxy frame ────────────────────────────────────────────────── */
+#frameWrap {
+  display: none;
+  position: fixed; inset: 0; z-index: 300;
+  flex-direction: column;
+  background: #000;
+}
+#frameWrap.open { display: flex; }
+
+#frameBack {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  background: var(--surf);
+  border: none; border-bottom: 1px solid var(--bdr);
+  color: var(--text-m);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px; cursor: pointer;
+  text-align: left;
+}
+#frameBack:hover { background: var(--surf-h); color: var(--text); }
+
+#proxyFrame {
+  flex: 1; width: 100%; border: none;
+}
+
 /* ── Modal backdrop ─────────────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 200;

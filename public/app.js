@@ -6,11 +6,15 @@ const searchHint    = document.getElementById('searchHint');
 const settingsBtn   = document.getElementById('settingsBtn');
 const modalBackdrop = document.getElementById('modalBackdrop');
 const modalClose    = document.getElementById('modalClose');
+const proxyFrame    = document.getElementById('proxyFrame');
+const frameWrap     = document.getElementById('frameWrap');
+const frameBack     = document.getElementById('frameBack');
 
-// BareMux connection at module scope so the SharedWorker persists
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 
 const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
+
+let scramjetFrame = null;
 
 function looksLikeUrl(s) {
   s = s.trim();
@@ -26,14 +30,28 @@ function toAbsoluteUrl(s) {
   return 'https://duckduckgo.com/?q=' + encodeURIComponent(s);
 }
 
+function showFrame() {
+  frameWrap.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideFrame() {
+  frameWrap.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 function proxyNavigate(targetUrl) {
   const ctrl = window.__liminalScramjet;
   if (!ctrl) { setHint('⚠ Proxy not ready yet.', true); return; }
   try {
-    window.location.href = ctrl.encodeUrl(targetUrl);
+    if (!scramjetFrame) {
+      scramjetFrame = ctrl.createFrame(proxyFrame);
+    }
+    scramjetFrame.go(targetUrl);
+    showFrame();
   } catch (e) {
     setHint('⚠ ' + e.message, true);
-    console.error('[liminal] encodeUrl failed:', e);
+    console.error('[liminal] navigate failed:', e);
   }
 }
 
@@ -111,12 +129,17 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     searchInput.focus();
   }
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') {
+    if (frameWrap.classList.contains('open')) hideFrame();
+    else closeModal();
+  }
 });
 
 document.querySelectorAll('.quick-btn').forEach(btn =>
   btn.addEventListener('click', () => proxyNavigate(btn.dataset.url))
 );
+
+frameBack.addEventListener('click', hideFrame);
 
 function setHint(msg, warn = false) {
   searchHint.textContent = msg;
