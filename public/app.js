@@ -60,7 +60,7 @@ async function initProxy() {
     setHint('[2/3] Setting up transport…');
     const localWisp = `wss://${location.host}/wisp/`;
     const wispUrl = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
-    await conn.setTransport('/epoxy/index.mjs', [{ websocket: wispUrl }]);
+    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
 
     setHint('[3/3] Starting proxy engine…');
     const { ScramjetController } = $scramjetLoadController();
