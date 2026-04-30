@@ -25,7 +25,7 @@ const FRAME_SANDBOX = [
   'allow-orientation-lock', 'allow-presentation',
 ].join(' ');
 
-const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
+let conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 
 const WISP_FALLBACKS = [
   'wss://wisp.mercurywork.shop/wisp/',
@@ -385,13 +385,36 @@ async function pickWisp() {
   return null;
 }
 
+function resetBareMuxDB() {
+  return new Promise(resolve => {
+    const req = indexedDB.deleteDatabase('bare-mux');
+    req.onsuccess = req.onerror = resolve;
+  });
+}
+
 async function setTransport(wispUrl) {
+  const attempt = async () => {
+    try {
+      await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
+      return 'libcurl';
+    } catch {
+      await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+      return 'epoxy';
+    }
+  };
+
   try {
-    await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
-    return 'libcurl';
-  } catch {
-    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-    return 'epoxy';
+    return await attempt();
+  } catch (e) {
+    // Stale IndexedDB schema (e.g. "config is not a known object store") —
+    // wipe the database and retry with a fresh connection.
+    if (String(e).includes('object store')) {
+      console.warn('[axis] bare-mux IDB schema stale, resetting…', e);
+      await resetBareMuxDB();
+      conn = new BareMux.BareMuxConnection('/baremux/worker.js');
+      return await attempt();
+    }
+    throw e;
   }
 }
 
