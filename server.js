@@ -10,40 +10,40 @@ function allowSW(req, res, next) {
   next();
 }
 
-const CACHE_LONG = { maxAge: '7d', immutable: true };
+// Revalidate every request — prevents stale JS after deploys
+function noCache(req, res, next) {
+  res.setHeader('Cache-Control', 'no-cache');
+  next();
+}
 
 // Scramjet dist
-app.use('/scramjet/', allowSW, express.static(
-  path.join(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist'),
-  CACHE_LONG
+app.use('/scramjet/', allowSW, noCache, express.static(
+  path.join(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist')
 ));
 
 // bare-mux
-app.use('/baremux/', express.static(
-  path.join(__dirname, 'node_modules/@mercuryworkshop/bare-mux/dist'),
-  CACHE_LONG
+app.use('/baremux/', noCache, express.static(
+  path.join(__dirname, 'node_modules/@mercuryworkshop/bare-mux/dist')
 ));
 
 // epoxy transport
-app.get('/epoxy/index.mjs', (req, res) => {
+app.get('/epoxy/index.mjs', noCache, (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
   res.sendFile(path.join(
     __dirname, 'node_modules/@mercuryworkshop/epoxy-transport/dist/index.mjs'
   ));
 });
 
 // libcurl transport
-app.get('/libcurl/index.mjs', (req, res) => {
+app.get('/libcurl/index.mjs', noCache, (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
   res.sendFile(path.join(
     __dirname, 'node_modules/@mercuryworkshop/libcurl-transport/dist/index.mjs'
   ));
 });
 
-// service worker
-app.get('/sw.js', allowSW, (req, res) =>
+// service worker — must never be cached so updates propagate immediately
+app.get('/sw.js', allowSW, noCache, (req, res) =>
   res.sendFile(path.join(__dirname, 'public/sw.js'))
 );
 

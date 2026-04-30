@@ -18,6 +18,10 @@ const newTabPage  = $('new-tab');
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
 
+// Must be narrow enough that scramjet's own static files are NOT under this
+// path, otherwise the SW intercepts them before they load.
+const PROXY_PREFIX = '/scramjet/proxy/';
+
 let tabs     = [];
 let activeId = null;
 let tabSeq   = 0;
@@ -184,21 +188,8 @@ function checkWisp(url) {
   });
 }
 
-// ── Clear stale IDB + service workers, then retry ─────────────────
-async function clearStaleState() {
-  if (indexedDB.databases) {
-    const dbs = await indexedDB.databases();
-    await Promise.all(dbs.map(({ name }) => new Promise(r => {
-      const req = indexedDB.deleteDatabase(name);
-      req.onsuccess = req.onerror = r;
-    })));
-  }
-  const regs = await navigator.serviceWorker.getRegistrations();
-  await Promise.all(regs.map(r => r.unregister()));
-}
-
 // ── Proxy init ────────────────────────────────────────────────────
-async function initProxy(attempt = 0) {
+async function initProxy() {
   if (!('serviceWorker' in navigator)) {
     setStatus('⚠ Service workers not supported.', true);
     return;
@@ -206,7 +197,17 @@ async function initProxy(attempt = 0) {
 
   try {
     setStatus('Registering service worker…');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/scramjet/' });
+
+    // Remove old SW registrations with wrong scope so they don't intercept
+    // static assets or hold open stale IDB connections.
+    for (const reg of await navigator.serviceWorker.getRegistrations()) {
+      if (!reg.scope.endsWith(PROXY_PREFIX)) await reg.unregister();
+    }
+
+    const reg = await navigator.serviceWorker.register('/sw.js', {
+      scope: PROXY_PREFIX,
+      updateViaCache: 'none',
+    });
 
     await new Promise((resolve, reject) => {
       if (reg.active) { resolve(); return; }
@@ -218,38 +219,46 @@ async function initProxy(attempt = 0) {
       });
     });
 
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+
     setStatus('Setting up transport…');
     const localWisp = `wss://${location.host}/wisp/`;
     const wispUrl   = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
 
-    try {
-      await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: libcurl');
-    } catch {
-      await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: epoxy');
-    }
+    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+    setStatus('Transport: epoxy');
 
     setStatus('Starting proxy engine…');
     const { ScramjetController } = $scramjetLoadController();
     const ctrl = new ScramjetController({
-      prefix: '/scramjet/',
+      prefix: PROXY_PREFIX,
       files: {
         wasm: '/scramjet/scramjet.wasm.wasm',
         all:  '/scramjet/scramjet.all.js',
         sync: '/scramjet/scramjet.sync.js',
       },
     });
-    await ctrl.init();
+
+    try {
+      await ctrl.init();
+    } catch (e) {
+      if (e.message?.includes('object store') || e.message?.includes('IDBDatabase')) {
+        await new Promise(r => {
+          const req = indexedDB.deleteDatabase('$scramjet');
+          req.onsuccess = req.onerror = req.onblocked = r;
+        });
+        await ctrl.init();
+      } else {
+        throw e;
+      }
+    }
+
     window.__axisCtrl = ctrl;
     setStatus('');
   } catch (e) {
-    // Stale IDB schema from a previous Scramjet version — clear and retry once
-    if (attempt === 0 && (e.message?.includes('IDBDatabase') || e.message?.includes('object store'))) {
-      setStatus('Clearing stale cache…');
-      await clearStaleState();
-      return initProxy(1);
-    }
     console.error('[axis] init failed:', e);
     setStatus('⚠ ' + e.message, true);
   }
@@ -261,6 +270,11 @@ function setStatus(msg, warn = false) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────
+const prevController = navigator.serviceWorker?.controller ?? null;
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (prevController) window.location.reload();
+});
+
 initProxy();
 openTab();
 window.addEventListener('load', () => searchInput.focus());
