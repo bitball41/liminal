@@ -11,8 +11,10 @@ self.addEventListener('fetch', event => {
     sw.loadConfig()
       .catch(() => {})
       .then(() => {
-        if (sw.route(event)) return sw.fetch(event);
-        return fetch(event.request);
+        // Guard: if config still null after loadConfig(), pass through.
+        // This also prevents route() from throwing on this.config.prefix.
+        if (!sw.config || !sw.route(event)) return fetch(event.request);
+        return sw.fetch(event);
       })
   );
 });

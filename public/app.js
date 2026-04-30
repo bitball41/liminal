@@ -18,6 +18,11 @@ const proxyFrame  = $('proxy-frame');
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
 
+// Proxy prefix — must be narrow enough that scramjet's own static files
+// (/scramjet/scramjet.all.js etc.) are NOT under this path, otherwise the
+// SW intercepts them before they can load and the whole page breaks.
+const PROXY_PREFIX = '/scramjet/proxy/';
+
 let axisFrame = null;   // ScramjetFrame instance
 let browsing  = false;
 
@@ -105,7 +110,17 @@ async function initProxy() {
 
   try {
     setStatus('Registering service worker…');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/scramjet/' });
+
+    // Remove any old SW registrations with the wrong scope (e.g. /scramjet/)
+    // so they can't hold open IDB connections or intercept static assets.
+    for (const reg of await navigator.serviceWorker.getRegistrations()) {
+      if (!reg.scope.endsWith(PROXY_PREFIX)) await reg.unregister();
+    }
+
+    const reg = await navigator.serviceWorker.register('/sw.js', {
+      scope: PROXY_PREFIX,
+      updateViaCache: 'none',
+    });
 
     await new Promise((resolve, reject) => {
       if (reg.active) { resolve(); return; }
@@ -117,30 +132,46 @@ async function initProxy() {
       });
     });
 
+    // Check for SW updates every 30 min and on tab focus
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+
     setStatus('Setting up transport…');
     const localWisp  = `wss://${location.host}/wisp/`;
     const wispUrl    = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
 
-    // Try libcurl first, fall back to epoxy
-    try {
-      await conn.setTransport('/libcurl/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: libcurl');
-    } catch {
-      await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-      setStatus('Transport: epoxy');
-    }
+    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+    setStatus('Transport: epoxy');
 
     setStatus('Starting proxy engine…');
     const { ScramjetController } = $scramjetLoadController();
     const ctrl = new ScramjetController({
-      prefix: '/scramjet/',
+      prefix: PROXY_PREFIX,
       files: {
         wasm: '/scramjet/scramjet.wasm.wasm',
         all:  '/scramjet/scramjet.all.js',
         sync: '/scramjet/scramjet.sync.js',
       },
     });
-    await ctrl.init();
+
+    // If ctrl.init() fails because IDB was previously created without its
+    // object stores (race from old /scramjet/ scope), delete it and retry.
+    try {
+      await ctrl.init();
+    } catch (e) {
+      if (e.message?.includes('object store') || e.message?.includes('IDBDatabase')) {
+        await new Promise(resolve => {
+          const r = indexedDB.deleteDatabase('$scramjet');
+          r.onsuccess = r.onerror = r.onblocked = () => resolve();
+        });
+        await ctrl.init();
+      } else {
+        throw e;
+      }
+    }
+
     window.__axisCtrl = ctrl;
     setStatus('');
   } catch (e) {
@@ -155,5 +186,12 @@ function setStatus(msg, warn = false) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────
+// Auto-update: reload when an existing SW is replaced by a newer one.
+// prevController is null on first install, so we skip the reload then.
+const prevController = navigator.serviceWorker?.controller ?? null;
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (prevController) window.location.reload();
+});
+
 initProxy();
 window.addEventListener('load', () => searchInput.focus());
