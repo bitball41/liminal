@@ -21,6 +21,13 @@ const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
 // Must be narrow enough that scramjet's own static files are NOT under this
 // path, otherwise the SW intercepts them before they load.
 const PROXY_PREFIX = '/scramjet/proxy/';
+// Proxy prefix — must be narrow enough that scramjet's own static files
+// (/scramjet/scramjet.all.js etc.) are NOT under this path, otherwise the
+// SW intercepts them before they can load and the whole page breaks.
+const PROXY_PREFIX = '/scramjet/proxy/';
+
+let axisFrame = null;   // ScramjetFrame instance
+let browsing  = false;
 
 let tabs     = [];
 let activeId = null;
@@ -200,6 +207,8 @@ async function initProxy() {
 
     // Remove old SW registrations with wrong scope so they don't intercept
     // static assets or hold open stale IDB connections.
+    // Remove any old SW registrations with the wrong scope (e.g. /scramjet/)
+    // so they can't hold open IDB connections or intercept static assets.
     for (const reg of await navigator.serviceWorker.getRegistrations()) {
       if (!reg.scope.endsWith(PROXY_PREFIX)) await reg.unregister();
     }
@@ -219,6 +228,7 @@ async function initProxy() {
       });
     });
 
+    // Check for SW updates every 30 min and on tab focus
     setInterval(() => reg.update(), 30 * 60 * 1000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') reg.update();
@@ -242,6 +252,8 @@ async function initProxy() {
       },
     });
 
+    // If ctrl.init() fails because IDB was previously created without its
+    // object stores (race from old /scramjet/ scope), delete it and retry.
     try {
       await ctrl.init();
     } catch (e) {
@@ -249,6 +261,9 @@ async function initProxy() {
         await new Promise(r => {
           const req = indexedDB.deleteDatabase('$scramjet');
           req.onsuccess = req.onerror = req.onblocked = r;
+        await new Promise(resolve => {
+          const r = indexedDB.deleteDatabase('$scramjet');
+          r.onsuccess = r.onerror = r.onblocked = () => resolve();
         });
         await ctrl.init();
       } else {
@@ -270,6 +285,8 @@ function setStatus(msg, warn = false) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────
+// Auto-update: reload when an existing SW is replaced by a newer one.
+// prevController is null on first install, so we skip the reload then.
 const prevController = navigator.serviceWorker?.controller ?? null;
 navigator.serviceWorker?.addEventListener('controllerchange', () => {
   if (prevController) window.location.reload();
