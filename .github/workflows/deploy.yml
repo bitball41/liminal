@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Elastic Beanstalk + CloudFront
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Create EB source bundle
+        run: |
+          zip -r deploy.zip . \
+            --exclude "*.git*" \
+            --exclude "infra/*" \
+            --exclude ".github/*" \
+            --exclude "*.log"
+
+      - name: Upload source bundle to S3
+        run: |
+          aws s3 cp deploy.zip \
+            s3://${{ secrets.EB_S3_BUCKET }}/liminal-${{ github.sha }}.zip
+
+      - name: Create new EB application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --version-label "${{ github.sha }}" \
+            --source-bundle S3Bucket="${{ secrets.EB_S3_BUCKET }}",S3Key="liminal-${{ github.sha }}.zip"
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          aws elasticbeanstalk update-environment \
+            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --environment-name "${{ secrets.EB_ENV_NAME }}" \
+            --version-label "${{ github.sha }}"
+
+      - name: Wait for EB environment to be healthy
+        run: |
+          aws elasticbeanstalk wait environment-updated \
+            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --environment-name "${{ secrets.EB_ENV_NAME }}"
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Resolve EB environment URL
+        id: eb_url
+        run: |
+          CNAME=$(aws elasticbeanstalk describe-environments \
+            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --environment-name "${{ secrets.EB_ENV_NAME }}" \
+            --query "Environments[0].CNAME" \
+            --output text)
+          echo "cname=$CNAME" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy CDK stack (CloudFront)
+        working-directory: infra
+        run: |
+          npx cdk deploy --require-approval never \
+            -c originDomain=${{ steps.eb_url.outputs.cname }}
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(aws cloudformation describe-stacks \
+            --stack-name LiminalStack \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text)
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/*"
