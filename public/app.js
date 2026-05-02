@@ -47,24 +47,20 @@ const SEARCH_ENGINES = {
   startpage:  q => 'https://www.startpage.com/search?q=' + encodeURIComponent(q),
 };
 
-function makeCloakFavicon(bg, letter) {
-  const fs = letter.length > 1 ? 13 : 20;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
-    `<rect width='32' height='32' rx='5' fill='${bg}'/>` +
-    `<text x='16' y='23' font-size='${fs}' font-weight='bold' ` +
-    `text-anchor='middle' fill='white' font-family='system-ui,sans-serif'>${letter}</text></svg>`;
-  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+// Use Google's favicon CDN so cloaks show the real site icons
+function gFav(domain) {
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 }
 
 const TAB_CLOAKS = {
-  none:      { title: 'Axis',                      favicon: null },
-  canvas:    { title: 'Dashboard - Canvas',         favicon: makeCloakFavicon('#B4371E', 'C') },
-  gdrive:    { title: 'My Drive - Google Drive',    favicon: makeCloakFavicon('#4285F4', '◆') },
-  canva:     { title: 'Home - Canva',               favicon: makeCloakFavicon('#7D2AE7', 'c') },
-  classlink: { title: 'ClassLink Launchpad',        favicon: makeCloakFavicon('#0070C0', 'CL') },
-  blooket:   { title: 'Blooket',                    favicon: makeCloakFavicon('#1368CE', 'B') },
-  classroom: { title: 'Google Classroom',           favicon: makeCloakFavicon('#1EA446', '≡') },
-  docs:      { title: 'Untitled document - Google Docs', favicon: makeCloakFavicon('#4285F4', '≡') },
+  none:      { title: 'Axis',                           favicon: null },
+  canvas:    { title: 'Dashboard - Canvas',              favicon: gFav('instructure.com') },
+  gdrive:    { title: 'My Drive - Google Drive',         favicon: gFav('drive.google.com') },
+  canva:     { title: 'Home - Canva',                    favicon: gFav('canva.com') },
+  classlink: { title: 'ClassLink Launchpad',             favicon: gFav('launchpad.classlink.com') },
+  blooket:   { title: 'Blooket',                         favicon: gFav('blooket.com') },
+  classroom: { title: 'Google Classroom',                favicon: gFav('classroom.google.com') },
+  docs:      { title: 'Untitled document - Google Docs', favicon: gFav('docs.google.com') },
 };
 
 const DEFAULT_SETTINGS = {
@@ -116,7 +112,7 @@ function createTabIframe() {
 function openTab(url = null) {
   const id = nextTabId++;
   const iframe = createTabIframe();
-  const tab = { id, title: 'New Tab', url: '', iframe, frame: null, navCount: 0 };
+  const tab = { id, title: 'New Tab', url: '', iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
   tabs.push(tab);
   activateTab(id);
   if (url) {
@@ -166,8 +162,8 @@ function activateTab(id) {
 
 function updateNavButtons(tab) {
   if (!tab) { btnBack.disabled = true; btnFwd.disabled = true; return; }
-  btnBack.disabled = tab.navCount < 1;
-  btnFwd.disabled = true;
+  btnBack.disabled = tab.navCount < 1 && tab.inPageNavCount < 1;
+  btnFwd.disabled = !tab.homeBackUrl;
 }
 
 const PAGE_ICON = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4.5" x2="9.5" y2="4.5"/><line x1="4.5" y1="7" x2="9.5" y2="7"/><line x1="4.5" y1="9.5" x2="7.5" y2="9.5"/></svg>`;
@@ -210,9 +206,18 @@ function toUrl(s) {
 }
 
 // ── Navigation ────────────────────────────────────────────────────
+let pendingUrl = null;
+
 function navigate(url) {
   const ctrl = window.__axisCtrl;
-  if (!ctrl) { setStatus('⚠ Proxy not ready. Try reloading.', true); return; }
+  if (!ctrl) {
+    pendingUrl = url;
+    setStatus('Proxy loading, will navigate when ready…');
+    // Still update UI so user sees something is happening
+    const tab = getActiveTab();
+    if (tab) { urlBar.value = url; }
+    return;
+  }
 
   const tab = getActiveTab();
   if (!tab) return;
@@ -220,18 +225,23 @@ function navigate(url) {
   if (!tab.frame) {
     tab.frame = ctrl.createFrame(tab.iframe);
     tab.frame.addEventListener('urlchange', e => {
+      tab.inPageNavCount++;
+      tab.homeBackUrl = null;
       tab.url = e.url;
       if (tab.id === activeTabId) urlBar.value = e.url;
       try {
         const u = new URL(e.url);
         tab.title = u.hostname || 'Loading…';
       } catch (_) { tab.title = 'Loading…'; }
+      updateNavButtons(tab);
       renderTabs();
     });
   }
 
   tab.url = url;
   tab.navCount++;
+  tab.inPageNavCount = 0;
+  tab.homeBackUrl = null;
   tab.frame.go(url);
   urlBar.value = url;
 
@@ -247,10 +257,42 @@ function navigate(url) {
 // ── Chrome controls ───────────────────────────────────────────────
 btnBack.addEventListener('click', () => {
   const tab = getActiveTab();
-  if (tab?.frame) { tab.frame.back(); tab.navCount = Math.max(0, tab.navCount - 1); updateNavButtons(tab); }
+  if (!tab) return;
+
+  if (tab.inPageNavCount > 0) {
+    // Navigate back within the current site
+    tab.inPageNavCount--;
+    tab.frame?.back();
+    tab.iframe.contentWindow?.history?.back();
+    updateNavButtons(tab);
+  } else if (tab.navCount > 0) {
+    // Back to home screen — save URL so forward can restore it
+    tab.homeBackUrl = tab.url;
+    tab.url = '';
+    tab.title = 'New Tab';
+    tab.navCount = 0;
+    tab.inPageNavCount = 0;
+    tab.iframe.hidden = true;
+    newTab.hidden = false;
+    urlBar.value = '';
+    searchInput.value = '';
+    updateNavButtons(tab);
+    renderTabs();
+    setTimeout(() => searchInput.focus(), 50);
+  }
 });
 
-btnFwd.addEventListener('click', () => getActiveTab()?.frame?.forward());
+btnFwd.addEventListener('click', () => {
+  const tab = getActiveTab();
+  if (!tab) return;
+  if (tab.homeBackUrl) {
+    // Re-navigate to where we were before going home
+    navigate(tab.homeBackUrl);
+  } else {
+    tab.frame?.forward();
+    tab.iframe.contentWindow?.history?.forward();
+  }
+});
 
 btnReload.addEventListener('click', () => {
   const tab = getActiveTab();
@@ -295,14 +337,14 @@ function checkWisp(url) {
   return new Promise(resolve => {
     const ws = new WebSocket(url);
     const done = ok => { clearTimeout(t); try { ws.close(); } catch (_) {} resolve(ok); };
-    const t = setTimeout(() => done(false), 2500);
+    const t = setTimeout(() => done(false), 5000);
     ws.addEventListener('open',  () => done(true));
     ws.addEventListener('error', () => done(false));
   });
 }
 
 // ── Proxy init ────────────────────────────────────────────────────
-async function initProxy() {
+async function initProxy(attempt = 1) {
   if (!('serviceWorker' in navigator)) {
     setStatus('⚠ Service workers not supported.', true);
     return;
@@ -330,17 +372,18 @@ async function initProxy() {
       });
     });
 
-    setInterval(() => reg.update(), 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reg.update();
-    });
+    if (attempt === 1) {
+      setInterval(() => reg.update(), 30 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }
 
     setStatus('Setting up transport…');
     const localWisp = `wss://${location.host}/wisp/`;
     const wispUrl   = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
 
     await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-    setStatus('Transport: epoxy');
 
     setStatus('Starting proxy engine…');
     const { ScramjetController } = $scramjetLoadController();
@@ -369,9 +412,22 @@ async function initProxy() {
 
     window.__axisCtrl = ctrl;
     setStatus('');
+
+    // Drain any URL that was queued before the proxy was ready
+    if (pendingUrl) {
+      const url = pendingUrl;
+      pendingUrl = null;
+      navigate(url);
+    }
   } catch (e) {
-    console.error('[axis] init failed:', e);
-    setStatus('⚠ ' + e.message, true);
+    console.error(`[axis] init failed (attempt ${attempt}):`, e);
+    if (attempt < 3) {
+      const delay = attempt * 2000;
+      setStatus(`⚠ Proxy error, retrying in ${delay / 1000}s…`, true);
+      setTimeout(() => initProxy(attempt + 1), delay);
+    } else {
+      setStatus('⚠ ' + e.message, true);
+    }
   }
 }
 
@@ -551,35 +607,24 @@ function applyAllSettings() {
 }
 
 // ── About:blank launcher ──────────────────────────────────────────
-function tryAboutBlankLaunch() {
+// The actual window.open() runs synchronously in <head> to preserve user activation.
+// Here we just react to the flags it set.
+function handleAboutBlankResult() {
   if (!settings.aboutBlankMode) return;
-  if (window !== window.top) return;
-  if (sessionStorage.getItem('axis-ab-done')) return;
+  if (window !== window.top) return; // Already inside an ab iframe
 
-  sessionStorage.setItem('axis-ab-done', '1');
-
-  const src = location.href;
-  const w = window.open('about:blank', '_blank');
-  if (!w) {
-    // Popup blocked — show manual launch button
+  if (window.__axisAbLaunched) {
+    // Stealth tab opened successfully — show "close this tab" message
+    document.body.innerHTML =
+      `<div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;` +
+      `justify-content:center;background:#000;color:#fff;font-family:system-ui,sans-serif;gap:10px">` +
+      `<p style="font-size:18px;opacity:0.6">Stealth tab opened.</p>` +
+      `<p style="font-size:13px;color:#555">You can close this tab.</p>` +
+      `</div>`;
+  } else if (window.__axisAbBlocked) {
+    // Popup was blocked — show the manual fallback button
     btnStealthLaunch.style.display = 'flex';
-    return;
   }
-
-  w.document.write(
-    `<!DOCTYPE html><html><head><title></title>` +
-    `<style>*{margin:0;padding:0}html,body,iframe{display:block;width:100%;height:100%;border:none;overflow:hidden}</style>` +
-    `</head><body><iframe src="${src}"></iframe></body></html>`
-  );
-  w.document.close();
-
-  // Let user know this tab can be closed
-  document.body.innerHTML =
-    `<div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;` +
-    `background:#000;color:#fff;font-family:system-ui,sans-serif;gap:10px">` +
-    `<p style="font-size:18px;opacity:0.6">Stealth tab opened.</p>` +
-    `<p style="font-size:13px;color:#444">You can close this tab.</p>` +
-    `</div>`;
 }
 
 btnStealthLaunch.addEventListener('click', () => {
@@ -611,6 +656,6 @@ navigator.serviceWorker?.addEventListener('controllerchange', () => {
 });
 
 applyAllSettings();
-tryAboutBlankLaunch();
+handleAboutBlankResult();
 openTab();
 initProxy();
