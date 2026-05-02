@@ -167,7 +167,7 @@ function activateTab(id) {
 function updateNavButtons(tab) {
   if (!tab) { btnBack.disabled = true; btnFwd.disabled = true; return; }
   btnBack.disabled = tab.navCount < 1;
-  btnFwd.disabled = false;
+  btnFwd.disabled = true;
 }
 
 const PAGE_ICON = `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4.5" y1="4.5" x2="9.5" y2="4.5"/><line x1="4.5" y1="7" x2="9.5" y2="7"/><line x1="4.5" y1="9.5" x2="7.5" y2="9.5"/></svg>`;
