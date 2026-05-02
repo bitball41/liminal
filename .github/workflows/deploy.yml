@@ -41,21 +41,21 @@ jobs:
       - name: Upload source bundle to S3
         run: |
           aws s3 cp deploy.zip \
-            s3://${{ secrets.EB_S3_BUCKET }}/liminal-${{ github.sha }}-${{ github.run_attempt }}.zip
+            s3://${{ secrets.EB_S3_BUCKET }}/liminal-${{ github.run_id }}.zip
 
       - name: Create new EB application version
         run: |
           aws elasticbeanstalk create-application-version \
             --application-name "${{ secrets.EB_APP_NAME }}" \
-            --version-label "${{ github.sha }}-${{ github.run_attempt }}" \
-            --source-bundle S3Bucket="${{ secrets.EB_S3_BUCKET }}",S3Key="liminal-${{ github.sha }}-${{ github.run_attempt }}.zip"
+            --version-label "${{ github.run_id }}" \
+            --source-bundle S3Bucket="${{ secrets.EB_S3_BUCKET }}",S3Key="liminal-${{ github.run_id }}.zip"
 
       - name: Deploy to Elastic Beanstalk
         run: |
           aws elasticbeanstalk update-environment \
             --application-name "${{ secrets.EB_APP_NAME }}" \
             --environment-name "${{ secrets.EB_ENV_NAME }}" \
-            --version-label "${{ github.sha }}-${{ github.run_attempt }}"
+            --version-label "${{ github.run_id }}"
 
       - name: Wait for EB environment to be healthy
         run: |
