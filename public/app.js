@@ -411,6 +411,7 @@ async function initProxy(attempt = 1) {
     }
 
     window.__axisCtrl = ctrl;
+    sessionStorage.removeItem('axis-sw-fix-attempted');
     setStatus('');
 
     // Drain any URL that was queued before the proxy was ready
@@ -425,7 +426,14 @@ async function initProxy(attempt = 1) {
       const delay = attempt * 2000;
       setStatus(`⚠ Proxy error, retrying in ${delay / 1000}s…`, true);
       setTimeout(() => initProxy(attempt + 1), delay);
+    } else if (!sessionStorage.getItem('axis-sw-fix-attempted')) {
+      // Auto-fix: stale service worker is the most common cause of proxy failures.
+      // Unregister it and reload so the browser installs a fresh one.
+      sessionStorage.setItem('axis-sw-fix-attempted', '1');
+      setStatus('Refreshing proxy…');
+      await forceReloadProxy();
     } else {
+      sessionStorage.removeItem('axis-sw-fix-attempted');
       setStatus('⚠ ' + e.message, true);
     }
   }
