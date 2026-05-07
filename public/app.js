@@ -20,6 +20,7 @@ const bookmarksList = $('bookmarks-list');
 const btnAddBm      = $('btn-add-bookmark');
 const btnMenu          = $('btn-menu');
 const btnOpenTab       = $('btn-open-tab');
+const btnDevtools      = $('btn-devtools');
 const settingsOverlay  = $('settings-overlay');
 const btnSettingsClose = $('btn-settings-close');
 const btnStealthLaunch = $('btn-stealth-launch');
@@ -72,6 +73,7 @@ const DEFAULT_SETTINGS = {
   searchEngine: 'duckduckgo',
   panicKey: '',
   panicUrl: 'https://classroom.google.com',
+  erudaEnabled: false,
 };
 
 function loadSettings() {
@@ -91,6 +93,7 @@ let settings = loadSettings();
 let tabs = [];
 let activeTabId = null;
 let nextTabId = 0;
+let dragSrcId = null;
 
 function getActiveTab() {
   return tabs.find(t => t.id === activeTabId) ?? null;
@@ -173,6 +176,7 @@ function renderTabs() {
   for (const tab of tabs) {
     const el = document.createElement('div');
     el.className = 'tab' + (tab.id === activeTabId ? ' active' : '');
+    el.draggable = true;
 
     const fav = document.createElement('div');
     fav.className = 'tab-favicon';
@@ -185,8 +189,42 @@ function renderTabs() {
     const close = document.createElement('button');
     close.className = 'tab-close';
     close.title = 'Close tab';
+    close.draggable = false;
     close.innerHTML = `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>`;
     close.addEventListener('click', e => { e.stopPropagation(); closeTab(tab.id); });
+
+    el.addEventListener('dragstart', e => {
+      dragSrcId = tab.id;
+      e.dataTransfer.effectAllowed = 'move';
+      requestAnimationFrame(() => el.classList.add('dragging'));
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      tabBarTabs.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
+      dragSrcId = null;
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (tab.id !== dragSrcId) {
+        tabBarTabs.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
+        el.classList.add('drag-over');
+      }
+    });
+    el.addEventListener('dragleave', e => {
+      if (!el.contains(e.relatedTarget)) el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (dragSrcId === null || dragSrcId === tab.id) return;
+      const srcIdx = tabs.findIndex(t => t.id === dragSrcId);
+      const dstIdx = tabs.findIndex(t => t.id === tab.id);
+      if (srcIdx === -1 || dstIdx === -1) return;
+      const [moved] = tabs.splice(srcIdx, 1);
+      tabs.splice(dstIdx, 0, moved);
+      renderTabs();
+    });
 
     el.appendChild(fav);
     el.appendChild(title);
@@ -453,7 +491,7 @@ async function forceReloadProxy() {
 
 function setStatus(msg, warn = false) {
   statusEl.textContent = msg;
-  statusEl.style.color = warn ? '#f66' : '#555';
+  statusEl.style.color = warn ? '#ff5555' : '';
 }
 
 // ── Bookmarks ─────────────────────────────────────────────────────
@@ -546,6 +584,9 @@ function syncSettingsPanel() {
 
   // Inputs
   $('input-panic-url').value = settings.panicUrl;
+
+  // Toggles
+  $('toggle-eruda').checked = settings.erudaEnabled;
 }
 
 const PROXY_BASE = 'https://dj9js1p9rozzq.cloudfront.net';
@@ -610,6 +651,28 @@ $('input-panic-url').addEventListener('input', e => {
 
 btnForceReload.addEventListener('click', forceReloadProxy);
 
+$('toggle-eruda').addEventListener('change', e => {
+  settings.erudaEnabled = e.target.checked;
+  saveSettings();
+  applyErudaSettings();
+});
+
+let erudaOpen = false;
+btnDevtools.addEventListener('click', () => {
+  if (!window.eruda) {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+    s.onload = () => { eruda.init(); eruda.show(); erudaOpen = true; };
+    document.body.appendChild(s);
+  } else if (erudaOpen) {
+    eruda.hide();
+    erudaOpen = false;
+  } else {
+    eruda.show();
+    erudaOpen = true;
+  }
+});
+
 // ── Apply settings ────────────────────────────────────────────────
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
@@ -628,10 +691,19 @@ function applyBookmarksBar() {
   bookmarksBar.classList.toggle('visible', visible);
 }
 
+function applyErudaSettings() {
+  btnDevtools.style.display = settings.erudaEnabled ? '' : 'none';
+  if (!settings.erudaEnabled && window.eruda) {
+    eruda.hide();
+    erudaOpen = false;
+  }
+}
+
 function applyAllSettings() {
   applyTheme();
   applyTabCloak();
   applyBookmarksBar();
+  applyErudaSettings();
   renderBookmarks();
 }
 

@@ -62,6 +62,9 @@
     <button class="nav-btn" id="btn-open-tab" title="Open in new tab">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="9" height="10" rx="1.5"/><path d="M5 4V3a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-1"/></svg>
     </button>
+    <button class="nav-btn" id="btn-devtools" title="Developer tools" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,5 1,8 4,11"/><polyline points="12,5 15,8 12,11"/><line x1="9.5" y1="2.5" x2="6.5" y2="13.5"/></svg>
+    </button>
     <button class="nav-btn" id="btn-menu" title="Settings">
       <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="2.5" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13.5" r="1.5"/></svg>
     </button>
@@ -153,19 +156,31 @@
             <div class="pane-label">Theme</div>
             <div class="theme-grid">
               <button class="theme-btn" data-theme="dark">
-                <span class="theme-swatch" style="background:#111;outline:1px solid #2a2a2a"></span>Dark
+                <span class="theme-swatch" style="background:#111;outline:1px solid #333"></span>Dark
               </button>
               <button class="theme-btn" data-theme="space">
-                <span class="theme-swatch" style="background:#09003d"></span>Deep Space
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#09003d 0%,#1c006a 100%)"></span>Deep Space
               </button>
               <button class="theme-btn" data-theme="midnight">
-                <span class="theme-swatch" style="background:#080d1a"></span>Midnight
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#080d1a 0%,#0d1a38 100%)"></span>Midnight
               </button>
               <button class="theme-btn" data-theme="aurora">
                 <span class="theme-swatch" style="background:linear-gradient(135deg,#0a0a14 0%,#1a0831 100%)"></span>Aurora
               </button>
               <button class="theme-btn" data-theme="light">
-                <span class="theme-swatch" style="background:#f0f2f5;outline:1px solid #ccc"></span>Light
+                <span class="theme-swatch" style="background:#f0f2f5;outline:1px solid #c0c0ce"></span>Light
+              </button>
+              <button class="theme-btn" data-theme="forest">
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#020d04 0%,#0a2814 100%)"></span>Forest
+              </button>
+              <button class="theme-btn" data-theme="crimson">
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0202 0%,#2a0808 100%)"></span>Crimson
+              </button>
+              <button class="theme-btn" data-theme="ember">
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0500 0%,#2a1400 100%)"></span>Ember
+              </button>
+              <button class="theme-btn" data-theme="rose">
+                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0208 0%,#2a0820 100%)"></span>Rose
               </button>
             </div>
           </div>
@@ -251,7 +266,18 @@
 
           <!-- Advanced -->
           <div class="sm-pane" data-pane="advanced">
-            <div class="pane-label">Advanced</div>
+            <div class="pane-label">Developer Tools</div>
+            <label class="setting-row toggle-row" style="margin-bottom:16px">
+              <div class="setting-info">
+                <span class="setting-name">Enable Eruda DevTools</span>
+                <span class="setting-hint">Shows a devtools button in the toolbar to inspect and debug the page</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-eruda" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <div class="pane-label">Proxy</div>
             <button id="btn-force-reload-proxy" class="action-btn">Force reload proxy</button>
             <p class="pane-hint" style="margin-top:8px">Clears the service worker and proxy cache, then reloads. Use if the proxy stops working.</p>
           </div>
