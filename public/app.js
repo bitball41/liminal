@@ -28,7 +28,9 @@ const btnForceReload = $('btn-force-reload-proxy');
 
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
-const PROXY_PREFIX = '/scramjet/proxy/';
+const PROXY_PREFIX    = '/scramjet/proxy/';
+const PROXY_PREFIX_V2 = '/scramjet2/proxy/';
+const PROXY_PREFIX_UV = '/uv/service/';
 
 const AXIS_FAVICON = "data:image/svg+xml," + encodeURIComponent(
   `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'>` +
@@ -74,6 +76,7 @@ const DEFAULT_SETTINGS = {
   panicKey: '',
   panicUrl: 'https://classroom.google.com',
   erudaEnabled: false,
+  proxyEngine: 'scramjet',
 };
 
 function loadSettings() {
@@ -382,81 +385,55 @@ function checkWisp(url) {
 }
 
 // ── Proxy init ────────────────────────────────────────────────────
+
+function activeProxyPrefix() {
+  const engine = settings.proxyEngine || 'scramjet';
+  if (engine === 'scramjet2')   return PROXY_PREFIX_V2;
+  if (engine === 'ultraviolet') return PROXY_PREFIX_UV;
+  return PROXY_PREFIX;
+}
+
+async function registerSW(swPath, scope) {
+  for (const reg of await navigator.serviceWorker.getRegistrations()) {
+    if (!reg.scope.endsWith(scope)) await reg.unregister();
+  }
+  const reg = await navigator.serviceWorker.register(swPath, {
+    scope,
+    updateViaCache: 'none',
+  });
+  await new Promise((resolve, reject) => {
+    if (reg.active) { resolve(); return; }
+    const sw = reg.installing || reg.waiting;
+    if (!sw) { reject(new Error('No service worker found')); return; }
+    sw.addEventListener('statechange', function() {
+      if (this.state === 'activated') resolve();
+      if (this.state === 'redundant')  reject(new Error('Service worker install failed'));
+    });
+  });
+  return reg;
+}
+
+async function setupTransport() {
+  setStatus('Setting up transport…');
+  const localWisp = `wss://${location.host}/wisp/`;
+  const wispUrl   = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
+  await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
+  return wispUrl;
+}
+
 async function initProxy(attempt = 1) {
   if (!('serviceWorker' in navigator)) {
     setStatus('⚠ Service workers not supported.', true);
     return;
   }
-
+  const engine = settings.proxyEngine || 'scramjet';
   try {
-    setStatus('Registering service worker…');
-
-    for (const reg of await navigator.serviceWorker.getRegistrations()) {
-      if (!reg.scope.endsWith(PROXY_PREFIX)) await reg.unregister();
-    }
-
-    const reg = await navigator.serviceWorker.register('/sw.js', {
-      scope: PROXY_PREFIX,
-      updateViaCache: 'none',
-    });
-
-    await new Promise((resolve, reject) => {
-      if (reg.active) { resolve(); return; }
-      const sw = reg.installing || reg.waiting;
-      if (!sw) { reject(new Error('No service worker found')); return; }
-      sw.addEventListener('statechange', function() {
-        if (this.state === 'activated') resolve();
-        if (this.state === 'redundant')  reject(new Error('Service worker install failed'));
-      });
-    });
-
-    if (attempt === 1) {
-      setInterval(() => reg.update(), 30 * 60 * 1000);
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') reg.update();
-      });
-    }
-
-    setStatus('Setting up transport…');
-    const localWisp = `wss://${location.host}/wisp/`;
-    const wispUrl   = (await checkWisp(localWisp)) ? localWisp : PUBLIC_WISP;
-
-    await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
-
-    setStatus('Starting proxy engine…');
-    const { ScramjetController } = $scramjetLoadController();
-    const ctrl = new ScramjetController({
-      prefix: PROXY_PREFIX,
-      files: {
-        wasm: '/scramjet/scramjet.wasm.wasm',
-        all:  '/scramjet/scramjet.all.js',
-        sync: '/scramjet/scramjet.sync.js',
-      },
-    });
-
-    try {
-      await ctrl.init();
-    } catch (e) {
-      if (e.message?.includes('object store') || e.message?.includes('IDBDatabase')) {
-        await new Promise(resolve => {
-          const r = indexedDB.deleteDatabase('$scramjet');
-          r.onsuccess = r.onerror = r.onblocked = () => resolve();
-        });
-        await ctrl.init();
-      } else {
-        throw e;
-      }
-    }
-
-    window.__axisCtrl = ctrl;
-    sessionStorage.removeItem('axis-sw-fix-attempted');
-    setStatus('');
-
-    // Drain any URL that was queued before the proxy was ready
-    if (pendingUrl) {
-      const url = pendingUrl;
-      pendingUrl = null;
-      navigate(url);
+    if (engine === 'ultraviolet') {
+      await initUV(attempt);
+    } else if (engine === 'scramjet2') {
+      await initScramjet2(attempt);
+    } else {
+      await initScramjet(attempt);
     }
   } catch (e) {
     console.error(`[axis] init failed (attempt ${attempt}):`, e);
@@ -465,8 +442,6 @@ async function initProxy(attempt = 1) {
       setStatus(`⚠ Proxy error, retrying in ${delay / 1000}s…`, true);
       setTimeout(() => initProxy(attempt + 1), delay);
     } else if (!sessionStorage.getItem('axis-sw-fix-attempted')) {
-      // Auto-fix: stale service worker is the most common cause of proxy failures.
-      // Unregister it and reload so the browser installs a fresh one.
       sessionStorage.setItem('axis-sw-fix-attempted', '1');
       setStatus('Refreshing proxy…');
       await forceReloadProxy();
@@ -477,15 +452,213 @@ async function initProxy(attempt = 1) {
   }
 }
 
+async function initScramjet(attempt = 1) {
+  setStatus('Registering service worker…');
+  const reg = await registerSW('/sw.js', PROXY_PREFIX);
+
+  if (attempt === 1) {
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  }
+
+  await setupTransport();
+  setStatus('Starting proxy engine…');
+
+  const { ScramjetController } = $scramjetLoadController();
+  const ctrl = new ScramjetController({
+    prefix: PROXY_PREFIX,
+    files: {
+      wasm: '/scramjet/scramjet.wasm.wasm',
+      all:  '/scramjet/scramjet.all.js',
+      sync: '/scramjet/scramjet.sync.js',
+    },
+  });
+
+  try {
+    await ctrl.init();
+  } catch (e) {
+    if (e.message?.includes('object store') || e.message?.includes('IDBDatabase')) {
+      await new Promise(resolve => {
+        const r = indexedDB.deleteDatabase('$scramjet');
+        r.onsuccess = r.onerror = r.onblocked = () => resolve();
+      });
+      await ctrl.init();
+    } else {
+      throw e;
+    }
+  }
+
+  window.__axisCtrl = ctrl;
+  sessionStorage.removeItem('axis-sw-fix-attempted');
+  setStatus('');
+
+  if (pendingUrl) {
+    const url = pendingUrl;
+    pendingUrl = null;
+    navigate(url);
+  }
+}
+
+async function initScramjet2(attempt = 1) {
+  setStatus('Registering service worker (Scramjet v2)…');
+  const reg = await registerSW('/sw-scramjet2.js', PROXY_PREFIX_V2);
+
+  if (attempt === 1) {
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  }
+
+  await setupTransport();
+  setStatus('Starting Scramjet v2…');
+
+  // v2 uses ScramjetFrame for per-tab navigation instead of a shared controller.
+  // Provide a controller-compatible shim so navigate() works unchanged.
+  window.__axisCtrl = {
+    _prefix: PROXY_PREFIX_V2,
+    createFrame(iframe) {
+      return new AxisScramjet2Frame(iframe, PROXY_PREFIX_V2);
+    },
+  };
+
+  sessionStorage.removeItem('axis-sw-fix-attempted');
+  setStatus('');
+
+  if (pendingUrl) {
+    const url = pendingUrl;
+    pendingUrl = null;
+    navigate(url);
+  }
+}
+
+async function initUV(attempt = 1) {
+  setStatus('Loading Ultraviolet…');
+
+  // Lazy-load UV bundle and config onto the main page for URL encoding
+  if (!window.__uv$config) {
+    await loadScript('/uv/uv.bundle.js');
+    await loadScript('/uv/uv.config.js');
+  }
+
+  setStatus('Registering service worker (Ultraviolet)…');
+  const reg = await registerSW('/sw-uv.js', PROXY_PREFIX_UV);
+
+  if (attempt === 1) {
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  }
+
+  await setupTransport();
+  setStatus('Starting Ultraviolet…');
+
+  window.__axisCtrl = {
+    _prefix: PROXY_PREFIX_UV,
+    createFrame(iframe) {
+      return new AxisUVFrame(iframe);
+    },
+  };
+
+  sessionStorage.removeItem('axis-sw-fix-attempted');
+  setStatus('');
+
+  if (pendingUrl) {
+    const url = pendingUrl;
+    pendingUrl = null;
+    navigate(url);
+  }
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+// Frame shim for Scramjet v2 — mirrors the ScramjetFrame API
+class AxisScramjet2Frame {
+  constructor(iframe, prefix) {
+    this._iframe = iframe;
+    this._prefix = prefix;
+    this._listeners = {};
+    iframe.addEventListener('load', () => this._onLoad());
+  }
+  _onLoad() {
+    try {
+      const href = this._iframe.contentWindow?.location.href;
+      if (href && href.startsWith(location.origin + this._prefix)) {
+        // URL is still scramjet-encoded; expose the raw encoded path as-is
+        this._listeners.urlchange?.forEach(fn => fn({ url: href }));
+      }
+    } catch (_) {}
+  }
+  go(url) {
+    // Scramjet v2 expects the URL encoded via its own scheme. For the alpha,
+    // we use the same encoding that v1's controller would produce by passing
+    // through the ScramjetController if available, otherwise fall back to
+    // directly encoding via encodeURIComponent as a best-effort approach.
+    const encoded = encodeURIComponent(url);
+    this._iframe.src = this._prefix + encoded;
+  }
+  reload() { this._iframe.contentWindow?.location.reload(); }
+  back()    { this._iframe.contentWindow?.history.back(); }
+  forward() { this._iframe.contentWindow?.history.forward(); }
+  addEventListener(type, fn) {
+    (this._listeners[type] ??= []).push(fn);
+  }
+}
+
+// Frame shim for Ultraviolet
+class AxisUVFrame {
+  constructor(iframe) {
+    this._iframe = iframe;
+    this._listeners = {};
+    iframe.addEventListener('load', () => this._onLoad());
+  }
+  _onLoad() {
+    try {
+      const href = this._iframe.contentWindow?.location.href;
+      if (href && window.__uv$config && href.includes(PROXY_PREFIX_UV)) {
+        const encoded = href.split(PROXY_PREFIX_UV)[1];
+        if (encoded) {
+          const decoded = window.__uv$config.decodeUrl(encoded.split('?')[0]);
+          this._listeners.urlchange?.forEach(fn => fn({ url: decoded }));
+        }
+      }
+    } catch (_) {}
+  }
+  go(url) {
+    if (!window.__uv$config) { this._iframe.src = url; return; }
+    this._iframe.src = PROXY_PREFIX_UV + window.__uv$config.encodeUrl(url);
+  }
+  reload() { this._iframe.contentWindow?.location.reload(); }
+  back()    { this._iframe.contentWindow?.history.back(); }
+  forward() { this._iframe.contentWindow?.history.forward(); }
+  addEventListener(type, fn) {
+    (this._listeners[type] ??= []).push(fn);
+  }
+}
+
 async function forceReloadProxy() {
   setStatus('Clearing proxy cache…');
   for (const reg of await navigator.serviceWorker.getRegistrations()) {
-    if (reg.scope.includes(PROXY_PREFIX)) await reg.unregister();
+    await reg.unregister();
   }
-  await new Promise(resolve => {
-    const r = indexedDB.deleteDatabase('$scramjet');
-    r.onsuccess = r.onerror = r.onblocked = resolve;
-  });
+  // Clear scramjet v1 and v2 IndexedDB stores
+  for (const db of ['$scramjet', '$scramjet2']) {
+    await new Promise(resolve => {
+      const r = indexedDB.deleteDatabase(db);
+      r.onsuccess = r.onerror = r.onblocked = resolve;
+    });
+  }
   window.location.reload(true);
 }
 
@@ -574,6 +747,11 @@ function syncSettingsPanel() {
     btn.classList.toggle('active', btn.dataset.cloak === settings.tabCloak);
   });
 
+  // Engine buttons
+  document.querySelectorAll('.engine-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.engine === (settings.proxyEngine || 'scramjet'));
+  });
+
   // Toggles
   $('toggle-about-blank').checked = settings.aboutBlankMode;
   $('toggle-bookmarks').checked   = settings.bookmarksVisible;
@@ -619,6 +797,15 @@ document.querySelectorAll('.cloak-btn').forEach(btn => {
     settings.tabCloak = btn.dataset.cloak;
     saveSettings();
     applyTabCloak();
+    syncSettingsPanel();
+  });
+});
+
+// Engine buttons
+document.querySelectorAll('.engine-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.proxyEngine = btn.dataset.engine;
+    saveSettings();
     syncSettingsPanel();
   });
 });

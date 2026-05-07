@@ -277,7 +277,23 @@
                 <span class="toggle-track"></span>
               </div>
             </label>
-            <div class="pane-label">Proxy</div>
+            <div class="pane-label">Proxy Engine</div>
+            <p class="pane-hint">Changes take effect after a proxy reload. Scramjet v2 and Ultraviolet are experimental.</p>
+            <div class="engine-grid" id="engine-grid">
+              <button class="engine-btn" data-engine="scramjet">
+                <span class="engine-name">Scramjet v1</span>
+                <span class="engine-hint">Default — stable</span>
+              </button>
+              <button class="engine-btn" data-engine="scramjet2">
+                <span class="engine-name">Scramjet v2</span>
+                <span class="engine-hint">Alpha — experimental</span>
+              </button>
+              <button class="engine-btn" data-engine="ultraviolet">
+                <span class="engine-name">Ultraviolet</span>
+                <span class="engine-hint">By Titanium Network</span>
+              </button>
+            </div>
+            <div class="pane-label" style="margin-top:16px">Proxy</div>
             <button id="btn-force-reload-proxy" class="action-btn">Force reload proxy</button>
             <p class="pane-hint" style="margin-top:8px">Clears the service worker and proxy cache, then reloads. Use if the proxy stops working.</p>
           </div>
