@@ -19,6 +19,7 @@ const bookmarksBar  = $('bookmarks-bar');
 const bookmarksList = $('bookmarks-list');
 const btnAddBm      = $('btn-add-bookmark');
 const btnMenu          = $('btn-menu');
+const btnOpenTab       = $('btn-open-tab');
 const settingsOverlay  = $('settings-overlay');
 const btnSettingsClose = $('btn-settings-close');
 const btnStealthLaunch = $('btn-stealth-launch');
@@ -102,7 +103,7 @@ function createTabIframe() {
   iframe.setAttribute('sandbox',
     'allow-same-origin allow-scripts allow-forms allow-popups allow-modals ' +
     'allow-pointer-lock allow-storage-access-by-user-activation ' +
-    'allow-orientation-lock allow-presentation'
+    'allow-orientation-lock allow-presentation allow-downloads'
   );
   document.body.appendChild(iframe);
   return iframe;
@@ -546,6 +547,14 @@ function syncSettingsPanel() {
   // Inputs
   $('input-panic-url').value = settings.panicUrl;
 }
+
+const PROXY_BASE = 'https://dj9js1p9rozzq.cloudfront.net';
+
+btnOpenTab.addEventListener('click', () => {
+  const url = getActiveTab()?.url || urlBar.value.trim();
+  if (!url) return;
+  window.open(PROXY_BASE + PROXY_PREFIX + encodeURIComponent(url), '_blank');
+});
 
 btnMenu.addEventListener('click', openSettings);
 btnSettingsClose.addEventListener('click', closeSettings);
