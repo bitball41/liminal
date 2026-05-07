@@ -18,9 +18,8 @@ const btnNewTab     = $('btn-new-tab');
 const bookmarksBar  = $('bookmarks-bar');
 const bookmarksList = $('bookmarks-list');
 const btnAddBm      = $('btn-add-bookmark');
-const btnMenu       = $('btn-menu');
-const settingsPanel = $('settings-panel');
-const settingsOverlay = $('settings-overlay');
+const btnMenu          = $('btn-menu');
+const settingsOverlay  = $('settings-overlay');
 const btnSettingsClose = $('btn-settings-close');
 const btnStealthLaunch = $('btn-stealth-launch');
 const btnForceReload = $('btn-force-reload-proxy');
@@ -502,17 +501,28 @@ btnAddBm.addEventListener('click', () => {
   renderBookmarks();
 });
 
-// ── Settings panel ────────────────────────────────────────────────
+// ── Settings modal ────────────────────────────────────────────────
 function openSettings() {
-  settingsPanel.classList.add('open');
   settingsOverlay.classList.add('open');
   syncSettingsPanel();
 }
 
 function closeSettings() {
-  settingsPanel.classList.remove('open');
   settingsOverlay.classList.remove('open');
 }
+
+function switchSettingsTab(tab) {
+  document.querySelectorAll('.sm-tab').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.tab === tab)
+  );
+  document.querySelectorAll('.sm-pane').forEach(pane =>
+    pane.classList.toggle('active', pane.dataset.pane === tab)
+  );
+}
+
+document.querySelectorAll('.sm-tab').forEach(btn =>
+  btn.addEventListener('click', () => switchSettingsTab(btn.dataset.tab))
+);
 
 function syncSettingsPanel() {
   // Theme buttons
@@ -539,7 +549,9 @@ function syncSettingsPanel() {
 
 btnMenu.addEventListener('click', openSettings);
 btnSettingsClose.addEventListener('click', closeSettings);
-settingsOverlay.addEventListener('click', closeSettings);
+settingsOverlay.addEventListener('click', e => {
+  if (e.target === settingsOverlay) closeSettings();
+});
 
 // Theme buttons
 document.querySelectorAll('.theme-btn').forEach(btn => {
@@ -652,7 +664,7 @@ btnStealthLaunch.addEventListener('click', () => {
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   if (!settings.panicKey || e.key !== settings.panicKey) return;
-  if (settingsPanel.classList.contains('open')) { closeSettings(); return; }
+  if (settingsOverlay.classList.contains('open')) { closeSettings(); return; }
   const url = settings.panicUrl || 'https://classroom.google.com';
   window.location.replace(url);
 });
