@@ -807,6 +807,7 @@ document.querySelectorAll('.engine-btn').forEach(btn => {
     settings.proxyEngine = btn.dataset.engine;
     saveSettings();
     syncSettingsPanel();
+    initProxy();
   });
 });
 
