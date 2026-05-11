@@ -1,5 +1,8 @@
 [
   {
+    "_docs": "Each shortcut: label (required), url (required), icon (optional). Icon can be a full image URL or a preset name like 'preset:star'. Preset names: home, star, mail, video, music, search, link, chat, news, bookmark. Leave icon out to auto-fetch the site's favicon."
+  },
+  {
     "label": "Google",
     "url": "https://www.google.com"
   },

@@ -964,6 +964,19 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Waffle menu ───────────────────────────────────────────────────
+const WAFFLE_PRESET_ICONS = {
+  home:     `<path d="M2 7.5L8 2l6 5.5"/><path d="M4 6.5V14h3v-3h2v3h3V6.5"/>`,
+  star:     `<polygon points="8,2 9.8,6.2 14.5,6.6 11,9.7 12.1,14.3 8,11.9 3.9,14.3 5,9.7 1.5,6.6 6.2,6.2"/>`,
+  mail:     `<rect x="1.5" y="4" width="13" height="9" rx="1.5"/><polyline points="1.5,4 8,9.5 14.5,4"/>`,
+  video:    `<polygon points="5,3.5 13.5,8 5,12.5"/>`,
+  music:    `<path d="M6 12V5l7-1.5v7.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="11" r="1.5"/>`,
+  search:   `<circle cx="6.5" cy="6.5" r="4"/><line x1="9.7" y1="9.7" x2="13.5" y2="13.5"/>`,
+  link:     `<path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.5 3.5 0 0 0-5-5L7 4"/><path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.5 3.5 0 0 0 5 5L9 12"/>`,
+  chat:     `<path d="M13 2H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2l3 3.5 3-3.5h2a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>`,
+  news:     `<rect x="2" y="2" width="12" height="12" rx="1.5"/><line x1="5" y1="5.5" x2="11" y2="5.5"/><line x1="5" y1="8" x2="11" y2="8"/><line x1="5" y1="10.5" x2="8" y2="10.5"/>`,
+  bookmark: `<path d="M4 2h8v12l-4-2.5L4 14V2z"/>`,
+};
+
 let waffleShortcuts = [];
 
 async function loadShortcuts() {
@@ -993,15 +1006,32 @@ function renderWafflePanel() {
     const btn = document.createElement('button');
     btn.className = 'waffle-item';
     btn.title = sc.label;
-    const img = document.createElement('img');
-    img.className = 'waffle-icon';
-    img.src = iconSrc;
-    img.alt = '';
-    img.onerror = () => { img.style.display = 'none'; };
+    if (iconSrc.startsWith('preset:')) {
+      const name = iconSrc.slice(7);
+      const paths = WAFFLE_PRESET_ICONS[name];
+      if (paths) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 16 16');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '1.4');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.className = 'waffle-icon-svg';
+        svg.innerHTML = paths;
+        btn.appendChild(svg);
+      }
+    } else {
+      const img = document.createElement('img');
+      img.className = 'waffle-icon';
+      img.src = iconSrc;
+      img.alt = '';
+      img.onerror = () => { img.style.display = 'none'; };
+      btn.appendChild(img);
+    }
     const lbl = document.createElement('span');
     lbl.className = 'waffle-label';
     lbl.textContent = sc.label;
-    btn.appendChild(img);
     btn.appendChild(lbl);
     btn.addEventListener('click', () => {
       closeWaffle();
