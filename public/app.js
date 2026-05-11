@@ -77,6 +77,7 @@ const DEFAULT_SETTINGS = {
   panicUrl: 'https://classroom.google.com',
   erudaEnabled: false,
   engine: 'scramjet',
+  tabPosition: 'top',
 };
 
 function loadSettings() {
@@ -765,6 +766,11 @@ function syncSettingsPanel() {
 
   // Toggles
   $('toggle-eruda').checked = settings.erudaEnabled;
+
+  // Tab position buttons
+  document.querySelectorAll('.tab-pos-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.pos === (settings.tabPosition || 'top'));
+  });
 }
 
 const SITE_BASE = 'https://dj9js1p9rozzq.cloudfront.net';
@@ -808,6 +814,16 @@ document.querySelectorAll('.engine-btn').forEach(btn => {
     saveSettings();
     syncSettingsPanel();
     initEngine();
+  });
+});
+
+// Tab position buttons
+document.querySelectorAll('.tab-pos-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.tabPosition = btn.dataset.pos;
+    saveSettings();
+    applyTabPosition();
+    syncSettingsPanel();
   });
 });
 
@@ -887,11 +903,21 @@ function applyErudaSettings() {
   }
 }
 
+function applyTabPosition() {
+  const pos = settings.tabPosition || 'top';
+  if (pos === 'top') {
+    document.documentElement.removeAttribute('data-tabs');
+  } else {
+    document.documentElement.setAttribute('data-tabs', pos);
+  }
+}
+
 function applyAllSettings() {
   applyTheme();
   applyTabCloak();
   applyBookmarksBar();
   applyErudaSettings();
+  applyTabPosition();
   renderBookmarks();
 }
 

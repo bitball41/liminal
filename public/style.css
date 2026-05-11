@@ -12,6 +12,7 @@
   --active:    #252525;
   --accent:    #4466ff;
   --tabs-h:    32px;
+  --tabs-w:    200px;
   --chrome-h:  40px;
   --bookmarks-h: 0px;
   --total-h:   calc(var(--tabs-h) + var(--chrome-h) + var(--bookmarks-h));
@@ -703,4 +704,177 @@ html, body {
 .toggle-input:checked + .toggle-track::after {
   transform: translateX(16px);
   background: #fff;
+}
+
+/* ── Tab position grid (settings) ────────────────────────────────── */
+.tab-pos-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.tab-pos-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background .1s, border-color .1s;
+}
+.tab-pos-btn:hover { background: var(--active); }
+.tab-pos-btn.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--hover)); }
+.tab-pos-btn svg { width: 48px; height: 36px; }
+
+/* ── Layout: bottom tabs ─────────────────────────────────────────── */
+[data-tabs="bottom"] #tab-bar {
+  top: auto;
+  bottom: 0;
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+[data-tabs="bottom"] #chrome {
+  top: 0;
+}
+[data-tabs="bottom"] #bookmarks-bar {
+  top: var(--chrome-h);
+}
+[data-tabs="bottom"] #new-tab,
+[data-tabs="bottom"] .nav-frame {
+  top: calc(var(--chrome-h) + var(--bookmarks-h));
+  bottom: var(--tabs-h);
+  height: auto;
+}
+[data-tabs="bottom"] .tab.active {
+  border-bottom: none;
+  border-top: 1px solid var(--surface);
+}
+
+/* ── Layout: left vertical tabs ──────────────────────────────────── */
+[data-tabs="left"] #tab-bar {
+  top: 0;
+  right: auto;
+  bottom: 0;
+  width: var(--tabs-w);
+  height: auto;
+  flex-direction: column;
+  border-bottom: none;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  align-items: stretch;
+}
+[data-tabs="left"] #tab-bar-tabs {
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+[data-tabs="left"] #tab-bar-tabs::-webkit-scrollbar { width: 0; }
+[data-tabs="left"] .tab {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  flex: none;
+  height: 36px;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+[data-tabs="left"] .tab.active {
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+}
+[data-tabs="left"] .tab.drag-over {
+  border-left: none;
+  border-top: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--hover));
+}
+[data-tabs="left"] #btn-new-tab {
+  width: 100%;
+  height: 36px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+[data-tabs="left"] #chrome {
+  left: var(--tabs-w);
+  top: 0;
+}
+[data-tabs="left"] #bookmarks-bar {
+  left: var(--tabs-w);
+  top: var(--chrome-h);
+}
+[data-tabs="left"] #new-tab,
+[data-tabs="left"] .nav-frame {
+  left: var(--tabs-w);
+  top: calc(var(--chrome-h) + var(--bookmarks-h));
+  width: auto;
+  height: auto;
+}
+
+/* ── Layout: right vertical tabs ─────────────────────────────────── */
+[data-tabs="right"] #tab-bar {
+  left: auto;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--tabs-w);
+  height: auto;
+  flex-direction: column;
+  border-bottom: none;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  align-items: stretch;
+}
+[data-tabs="right"] #tab-bar-tabs {
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+[data-tabs="right"] #tab-bar-tabs::-webkit-scrollbar { width: 0; }
+[data-tabs="right"] .tab {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  flex: none;
+  height: 36px;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+[data-tabs="right"] .tab.active {
+  border-bottom: 1px solid var(--border);
+  border-right: 2px solid var(--accent);
+}
+[data-tabs="right"] .tab.drag-over {
+  border-left: none;
+  border-top: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--hover));
+}
+[data-tabs="right"] #btn-new-tab {
+  width: 100%;
+  height: 36px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+[data-tabs="right"] #chrome {
+  right: var(--tabs-w);
+  left: 0;
+  top: 0;
+}
+[data-tabs="right"] #bookmarks-bar {
+  right: var(--tabs-w);
+  left: 0;
+  top: var(--chrome-h);
+}
+[data-tabs="right"] #new-tab,
+[data-tabs="right"] .nav-frame {
+  right: var(--tabs-w);
+  left: 0;
+  top: calc(var(--chrome-h) + var(--bookmarks-h));
+  width: auto;
+  height: auto;
 }
