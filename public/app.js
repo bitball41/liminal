@@ -19,6 +19,8 @@ const bookmarksBar  = $('bookmarks-bar');
 const bookmarksList = $('bookmarks-list');
 const btnAddBm      = $('btn-add-bookmark');
 const btnMenu          = $('btn-menu');
+const btnWaffle        = $('btn-waffle');
+const wafflePanel      = $('waffle-panel');
 const btnOpenTab       = $('btn-open-tab');
 const btnDevtools      = $('btn-devtools');
 const settingsOverlay  = $('settings-overlay');
@@ -961,6 +963,76 @@ document.addEventListener('keydown', e => {
   window.location.replace(url);
 });
 
+// ── Waffle menu ───────────────────────────────────────────────────
+let waffleShortcuts = [];
+
+async function loadShortcuts() {
+  try {
+    const resp = await fetch('/shortcuts.json');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    waffleShortcuts = Array.isArray(data) ? data.filter(s => s.url) : [];
+    renderWafflePanel();
+  } catch (_) {}
+}
+
+function renderWafflePanel() {
+  wafflePanel.innerHTML = '';
+  if (!waffleShortcuts.length) {
+    const empty = document.createElement('p');
+    empty.style.cssText = 'font-size:12px;color:var(--muted);padding:12px;grid-column:1/-1;text-align:center';
+    empty.textContent = 'No shortcuts yet';
+    wafflePanel.appendChild(empty);
+    return;
+  }
+  waffleShortcuts.forEach(sc => {
+    let iconSrc = sc.icon || '';
+    if (!iconSrc) {
+      try { iconSrc = `https://www.google.com/s2/favicons?domain=${new URL(sc.url).hostname}&sz=32`; } catch (_) {}
+    }
+    const btn = document.createElement('button');
+    btn.className = 'waffle-item';
+    btn.title = sc.label;
+    const img = document.createElement('img');
+    img.className = 'waffle-icon';
+    img.src = iconSrc;
+    img.alt = '';
+    img.onerror = () => { img.style.display = 'none'; };
+    const lbl = document.createElement('span');
+    lbl.className = 'waffle-label';
+    lbl.textContent = sc.label;
+    btn.appendChild(img);
+    btn.appendChild(lbl);
+    btn.addEventListener('click', () => {
+      closeWaffle();
+      navigate(sc.url);
+    });
+    wafflePanel.appendChild(btn);
+  });
+}
+
+function openWaffle() {
+  const rect = btnWaffle.getBoundingClientRect();
+  wafflePanel.style.right = (window.innerWidth - rect.right) + 'px';
+  wafflePanel.style.top   = (rect.bottom + 4) + 'px';
+  wafflePanel.classList.add('open');
+}
+
+function closeWaffle() {
+  wafflePanel.classList.remove('open');
+}
+
+btnWaffle.addEventListener('click', e => {
+  e.stopPropagation();
+  wafflePanel.classList.contains('open') ? closeWaffle() : openWaffle();
+});
+
+document.addEventListener('click', e => {
+  if (!wafflePanel.contains(e.target) && e.target !== btnWaffle) {
+    closeWaffle();
+  }
+});
+
 // ── Boot ──────────────────────────────────────────────────────────
 const prevController = navigator.serviceWorker?.controller ?? null;
 navigator.serviceWorker?.addEventListener('controllerchange', () => {
@@ -971,3 +1043,4 @@ applyAllSettings();
 handleAboutBlankResult();
 openTab();
 initEngine();
+loadShortcuts();

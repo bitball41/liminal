@@ -248,6 +248,54 @@ html, body {
 }
 #url-bar::placeholder { color: var(--muted); }
 
+/* ── Waffle menu ─────────────────────────────────────────────────── */
+#waffle-panel {
+  position: fixed;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: none;
+  grid-template-columns: repeat(3, 72px);
+  gap: 4px;
+  z-index: 200;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.45);
+  max-height: 360px;
+  overflow-y: auto;
+}
+#waffle-panel.open { display: grid; }
+
+.waffle-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text);
+  transition: background .1s;
+}
+.waffle-item:hover { background: var(--hover); }
+
+.waffle-icon {
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.waffle-label {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 68px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-family: inherit;
+}
+
 /* ── Bookmarks bar ───────────────────────────────────────────────── */
 #bookmarks-bar {
   position: fixed;
