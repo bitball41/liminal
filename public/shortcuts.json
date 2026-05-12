@@ -3,15 +3,28 @@
     "_docs": "Each shortcut: label (required), url (required), icon (optional). Icon can be a full image URL or a preset name like 'preset:star'. Preset names: home, star, mail, video, music, search, link, chat, news, bookmark. Leave icon out to auto-fetch the site's favicon."
   },
   {
-    "label": "Google",
-    "url": "https://www.google.com"
+    "label": "DuckDuckGo",
+    "url": "https://duckduckgo.com"
+    "icon": "preset:search"
   },
   {
     "label": "YouTube",
-    "url": "https://www.youtube.com"
+    "url": "https://www.infaredbrowser.dynv6.net"
+    "icon": "preset:video"
   },
   {
     "label": "GitHub",
     "url": "https://github.com"
-  }
+    "icon": "preset:star"
+  },
+  {
+    "label": "Tiktok",
+    "url": "https://tiktok.com"
+    "icon": "preset:video"
+  },
+    {
+    "label": "Games",
+    "url": "https://crazygames.com"
+    "icon": "preset:news"
+  },
 ]
