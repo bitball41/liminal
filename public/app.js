@@ -29,7 +29,12 @@ const btnStealthLaunch = $('btn-stealth-launch');
 const btnForceReload = $('btn-force-reload');
 
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
-const PUBLIC_WISP = 'wss://wisp.mercurywork.shop/wisp/';
+const PUBLIC_WISP_SERVERS = [
+  'wss://wisp.mercurywork.shop/wisp/',
+  'wss://anura.pro/wisp/',
+  'wss://nebulaservices.org/wisp/',
+  'wss://wisp.terbiumon.top/wisp/',
+];
 const SVC_PREFIX    = '/scramjet/service/';
 const SVC_PREFIX_V2 = '/scramjet2/service/';
 
@@ -411,19 +416,41 @@ async function registerSW(swPath, scope) {
   return reg;
 }
 
+// Resolves to the first URL whose probe returns true, or null if all fail.
+function firstReachable(urls) {
+  return new Promise(resolve => {
+    let remaining = urls.length;
+    if (remaining === 0) { resolve(null); return; }
+    let settled = false;
+    urls.forEach(url => {
+      checkWisp(url).then(ok => {
+        if (settled) return;
+        if (ok) { settled = true; resolve(url); return; }
+        if (--remaining === 0) resolve(null);
+      });
+    });
+  });
+}
+
 async function setupTransport() {
   setStatus('Setting up transport…');
   const localWisp = `wss://${location.host}/wisp/`;
+
+  // Probe local and all public servers in parallel. Prefer local when it
+  // succeeds, otherwise use whichever public server responds first.
   const localPromise  = checkWisp(localWisp);
-  const publicPromise = checkWisp(PUBLIC_WISP);
+  const publicPromise = firstReachable(PUBLIC_WISP_SERVERS);
 
   let wispUrl;
   if (await localPromise) {
     wispUrl = localWisp;
-  } else if (await publicPromise) {
-    wispUrl = PUBLIC_WISP;
   } else {
-    throw new Error('No Wisp server reachable — check your connection.');
+    const publicUrl = await publicPromise;
+    if (publicUrl) {
+      wispUrl = publicUrl;
+    } else {
+      throw new Error('No Wisp server reachable — check your connection.');
+    }
   }
 
   await conn.setTransport('/epoxy/index.mjs', [{ wisp: wispUrl }]);
