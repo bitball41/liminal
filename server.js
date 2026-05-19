@@ -67,5 +67,5 @@ server.on('upgrade', (req, socket, head) => {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () =>
-  console.log(`\nAxis  →  http://localhost:${PORT}\n`)
+  console.log(`\nBardo  →  http://localhost:${PORT}\n`)
 );
