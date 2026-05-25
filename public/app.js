@@ -342,7 +342,7 @@ btnFwd.addEventListener('click', () => {
 btnReload.addEventListener('click', () => {
   const tab = getActiveTab();
   if (tab?.url) tab.frame?.reload();
-  else initEngine();
+  else if (!window.__bardoCtrl) initEngine();
 });
 
 btnHome.addEventListener('click', () => {
@@ -389,6 +389,10 @@ function checkWisp(url, timeoutMs = 8000) {
 }
 
 // ── Engine init ───────────────────────────────────────────────────
+
+// Retained across engine switches so stale listeners/intervals can be cleared.
+let _swUpdateInterval = null;
+let _visibilityHandler = null;
 
 function activeSvcPrefix() {
   const engine = settings.engine || 'scramjet';
@@ -491,10 +495,11 @@ async function initScramjet(attempt = 1) {
   const reg = await registerSW('/sw.js', SVC_PREFIX);
 
   if (attempt === 1) {
-    setInterval(() => reg.update(), 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reg.update();
-    });
+    if (_swUpdateInterval) clearInterval(_swUpdateInterval);
+    if (_visibilityHandler) document.removeEventListener('visibilitychange', _visibilityHandler);
+    _swUpdateInterval = setInterval(() => reg.update(), 30 * 60 * 1000);
+    _visibilityHandler = () => { if (document.visibilityState === 'visible') reg.update(); };
+    document.addEventListener('visibilitychange', _visibilityHandler);
   }
 
   await setupTransport();
@@ -540,10 +545,11 @@ async function initScramjet2(attempt = 1) {
   const reg = await registerSW('/sw-scramjet2.js', SVC_PREFIX_V2);
 
   if (attempt === 1) {
-    setInterval(() => reg.update(), 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reg.update();
-    });
+    if (_swUpdateInterval) clearInterval(_swUpdateInterval);
+    if (_visibilityHandler) document.removeEventListener('visibilitychange', _visibilityHandler);
+    _swUpdateInterval = setInterval(() => reg.update(), 30 * 60 * 1000);
+    _visibilityHandler = () => { if (document.visibilityState === 'visible') reg.update(); };
+    document.addEventListener('visibilitychange', _visibilityHandler);
   }
 
   await setupTransport();
@@ -589,9 +595,13 @@ class BardoScramjet2Frame {
   _onLoad() {
     try {
       const href = this._iframe.contentWindow?.location.href;
-      if (href && href.startsWith(location.origin + this._prefix)) {
-        // URL is still scramjet-encoded; expose the raw encoded path as-is
-        this._listeners.urlchange?.forEach(fn => fn({ url: href }));
+      const base = location.origin + this._prefix;
+      if (href && href.startsWith(base)) {
+        // Decode the scramjet-encoded path back to the real URL so callers see
+        // the destination URL, matching what ScramjetFrame fires in v1.
+        let realUrl = href;
+        try { realUrl = decodeURIComponent(href.slice(base.length)); } catch (_) {}
+        this._listeners.urlchange?.forEach(fn => fn({ url: realUrl }));
       }
     } catch (_) {}
   }
@@ -623,7 +633,7 @@ async function forceReload() {
       r.onsuccess = r.onerror = r.onblocked = resolve;
     });
   }
-  window.location.reload(true);
+  window.location.reload();
 }
 
 function setStatus(msg, warn = false) {
@@ -736,12 +746,17 @@ function syncSettingsPanel() {
   });
 }
 
-const SITE_BASE = 'https://dj9js1p9rozzq.cloudfront.net';
-
 btnOpenTab.addEventListener('click', () => {
-  const url = getActiveTab()?.url || urlBar.value.trim();
-  if (!url) return;
-  window.open(SITE_BASE + SVC_PREFIX + encodeURIComponent(url), '_blank');
+  const rawUrl = getActiveTab()?.url || urlBar.value.trim();
+  if (!rawUrl) return;
+  const ctrl = window.__bardoCtrl;
+  if (!ctrl) return;
+  const prefix = activeSvcPrefix();
+  // Prefer the controller's codec; fall back to encodeURIComponent as last resort.
+  const encode = ctrl.encodeUrl?.bind(ctrl)
+    ?? ctrl.ctx?.codec?.encode?.bind(ctrl.ctx?.codec)
+    ?? encodeURIComponent;
+  window.open(location.origin + prefix + encode(rawUrl), '_blank');
 });
 
 btnMenu.addEventListener('click', openSettings);
@@ -828,7 +843,7 @@ let erudaOpen = false;
 btnDevtools.addEventListener('click', () => {
   if (!window.eruda) {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+    s.src = 'https://cdn.jsdelivr.net/npm/eruda@3/eruda.min.js';
     s.onload = () => { eruda.init(); eruda.show(); erudaOpen = true; };
     document.body.appendChild(s);
   } else if (erudaOpen) {
