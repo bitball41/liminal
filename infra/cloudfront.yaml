@@ -79,6 +79,11 @@ Resources:
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD, OPTIONS]
             CachePolicyId: !Ref StaticCachePolicy
+          - PathPattern: /scramjet2/*
+            TargetOriginId: ElasticBeanstalk
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !Ref StaticCachePolicy
           - PathPattern: /baremux/*
             TargetOriginId: ElasticBeanstalk
             ViewerProtocolPolicy: redirect-to-https

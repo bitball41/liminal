@@ -16,34 +16,26 @@ function noCache(req, res, next) {
   next();
 }
 
-// Scramjet v1 dist
-app.use('/scramjet/', allowSW, noCache, express.static(
+// Scramjet v1 dist — versioned build artifacts; CloudFront invalidation handles stale cache on deploy
+app.use('/scramjet/', allowSW, express.static(
   path.join(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist')
 ));
 
 // Scramjet v2 dist (alpha)
-app.use('/scramjet2/', allowSW, noCache, express.static(
+app.use('/scramjet2/', allowSW, express.static(
   path.join(__dirname, 'node_modules/scramjet-v2/dist')
 ));
 
 // bare-mux
-app.use('/baremux/', noCache, express.static(
+app.use('/baremux/', express.static(
   path.join(__dirname, 'node_modules/@mercuryworkshop/bare-mux/dist')
 ));
 
 // epoxy transport
-app.get('/epoxy/index.mjs', noCache, (req, res) => {
+app.get('/epoxy/index.mjs', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.sendFile(path.join(
     __dirname, 'node_modules/@mercuryworkshop/epoxy-transport/dist/index.mjs'
-  ));
-});
-
-// libcurl transport
-app.get('/libcurl/index.mjs', noCache, (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
-  res.sendFile(path.join(
-    __dirname, 'node_modules/@mercuryworkshop/libcurl-transport/dist/index.mjs'
   ));
 });
 
@@ -56,8 +48,8 @@ app.get('/sw-scramjet2.js', allowSW, noCache, (req, res) =>
   res.sendFile(path.join(__dirname, 'public/sw-scramjet2.js'))
 );
 
-// static assets
-app.use(express.static(path.join(__dirname, 'public')));
+// static public assets — no-cache so index.html + app.js updates propagate immediately
+app.use(noCache, express.static(path.join(__dirname, 'public')));
 
 const server = http.createServer(app);
 
