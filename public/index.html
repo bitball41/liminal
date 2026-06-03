@@ -87,6 +87,11 @@
 
   <!-- New-tab page -->
   <div id="new-tab">
+    <div id="nt-clock">
+      <span id="nt-time"></span>
+      <span id="nt-greeting"></span>
+    </div>
+
     <div id="brand">
       <svg id="logo" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M16 68 L16 38 Q16 12 40 12 Q64 12 64 38 L64 68" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
@@ -101,6 +106,9 @@
     </form>
 
     <p id="status"></p>
+
+    <!-- Quick links (populated from shortcuts.json) -->
+    <div id="nt-quicklinks"></div>
 
     <button id="btn-stealth-launch" class="stealth-launch-btn" style="display:none">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2C4.5 2 1.5 5 1.5 8s3 6 6.5 6 6.5-3 6.5-6-3-6-6.5-6z"/><circle cx="8" cy="8" r="2.5"/></svg>
@@ -163,6 +171,27 @@
 
           <!-- Appearance -->
           <div class="sm-pane active" data-pane="appearance">
+            <div class="pane-label">Interface</div>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">Custom cursor</span>
+                <span class="setting-hint">Accent dot with a trailing ring that reacts to buttons and links</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-cursor" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row" style="margin-bottom:18px">
+              <div class="setting-info">
+                <span class="setting-name">New-tab clock</span>
+                <span class="setting-hint">Show a live clock and greeting on the new-tab page</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-clock" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
             <div class="pane-label">Theme</div>
             <div class="theme-grid">
               <button class="theme-btn" data-theme="dark">
@@ -348,6 +377,10 @@
       </div>
     </div>
   </div>
+
+  <!-- Custom cursor (accent dot + trailing ring) -->
+  <div id="cursor-ring"></div>
+  <div id="cursor-dot"></div>
 
   <script src="/scramjet/scramjet.all.js" defer></script>
   <script src="/baremux/index.js"         defer></script>

@@ -81,6 +81,8 @@ const DEFAULT_SETTINGS = {
   erudaEnabled: false,
   engine: 'scramjet',
   tabPosition: 'top',
+  customCursor: true,
+  ntClock: true,
 };
 
 function loadSettings() {
@@ -804,6 +806,8 @@ function syncSettingsPanel() {
 
   // Toggles
   $('toggle-eruda').checked = settings.erudaEnabled;
+  $('toggle-cursor').checked = settings.customCursor;
+  $('toggle-clock').checked  = settings.ntClock;
 
   // Tab position buttons
   document.querySelectorAll('.tab-pos-btn').forEach(btn => {
@@ -908,6 +912,18 @@ $('toggle-eruda').addEventListener('change', e => {
   applyErudaSettings();
 });
 
+$('toggle-cursor').addEventListener('change', e => {
+  settings.customCursor = e.target.checked;
+  saveSettings();
+  applyCustomCursor();
+});
+
+$('toggle-clock').addEventListener('change', e => {
+  settings.ntClock = e.target.checked;
+  saveSettings();
+  applyClock();
+});
+
 let erudaOpen = false;
 btnDevtools.addEventListener('click', () => {
   if (!window.eruda) {
@@ -959,12 +975,95 @@ function applyTabPosition() {
   }
 }
 
+// ── Custom cursor ─────────────────────────────────────────────────
+const cursorDot  = $('cursor-dot');
+const cursorRing = $('cursor-ring');
+let curMouseX = 0, curMouseY = 0, curRingX = 0, curRingY = 0;
+let cursorRAF = null, cursorShown = false;
+
+const CURSOR_INTERACTIVE =
+  'button, a, input, select, textarea, label, .tab, .bookmark-item, ' +
+  '.waffle-item, .ql-item, .theme-btn, .cloak-btn, .engine-btn, .tab-pos-btn, .sm-tab, .toggle-wrap';
+
+function showCursor() {
+  if (cursorShown) return;
+  cursorShown = true;
+  cursorDot.style.opacity = '1';
+  cursorRing.style.opacity = '1';
+}
+function hideCursor() {
+  if (!cursorShown) return;
+  cursorShown = false;
+  cursorDot.style.opacity = '0';
+  cursorRing.style.opacity = '0';
+}
+function cursorLoop() {
+  curRingX += (curMouseX - curRingX) * 0.2;
+  curRingY += (curMouseY - curRingY) * 0.2;
+  cursorRing.style.transform = `translate(${curRingX}px, ${curRingY}px)`;
+  cursorRAF = requestAnimationFrame(cursorLoop);
+}
+document.addEventListener('mousemove', e => {
+  if (!settings.customCursor) return;
+  curMouseX = e.clientX; curMouseY = e.clientY;
+  cursorDot.style.transform = `translate(${curMouseX}px, ${curMouseY}px)`;
+  showCursor();
+  cursorRing.classList.toggle('hover', !!e.target.closest?.(CURSOR_INTERACTIVE));
+}, { passive: true });
+document.addEventListener('mousedown', () => cursorRing.classList.add('down'));
+document.addEventListener('mouseup',   () => cursorRing.classList.remove('down'));
+// The pointer entering a proxied iframe stops firing parent mousemoves, so hide
+// the overlay there and let the page's own native cursor take over.
+document.addEventListener('mouseover', e => { if (e.target.tagName === 'IFRAME') hideCursor(); });
+document.addEventListener('mouseleave', hideCursor);
+window.addEventListener('blur', hideCursor);
+
+function applyCustomCursor() {
+  if (settings.customCursor) {
+    document.documentElement.classList.add('custom-cursor');
+    if (!cursorRAF) cursorLoop();
+  } else {
+    document.documentElement.classList.remove('custom-cursor');
+    hideCursor();
+    if (cursorRAF) { cancelAnimationFrame(cursorRAF); cursorRAF = null; }
+  }
+}
+
+// ── New-tab clock ─────────────────────────────────────────────────
+let clockTimer = null;
+function tickClock() {
+  const time = $('nt-time'), greet = $('nt-greeting');
+  if (!time || !greet) return;
+  const now = new Date();
+  time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const h = now.getHours();
+  greet.textContent =
+    h < 5  ? 'Good night'   :
+    h < 12 ? 'Good morning' :
+    h < 18 ? 'Good afternoon' :
+             'Good evening';
+}
+function applyClock() {
+  const clock = $('nt-clock');
+  if (!clock) return;
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  if (settings.ntClock) {
+    tickClock();
+    clock.classList.add('visible');
+    clockTimer = setInterval(tickClock, 10000);
+  } else {
+    clock.classList.remove('visible');
+  }
+}
+
 function applyAllSettings() {
   applyTheme();
   applyTabCloak();
   applyBookmarksBar();
   applyErudaSettings();
   applyTabPosition();
+  applyCustomCursor();
+  applyClock();
   renderBookmarks();
 }
 
@@ -1030,11 +1129,58 @@ let waffleShortcuts = [];
 async function loadShortcuts() {
   try {
     const resp = await fetch('/shortcuts.json');
-    if (!resp.ok) return;
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     waffleShortcuts = Array.isArray(data) ? data.filter(s => s.url) : [];
     renderWafflePanel();
-  } catch (_) {}
+    renderQuickLinks();
+  } catch (e) {
+    console.error('[bardo] failed to load shortcuts:', e);
+  }
+}
+
+// Resolve a shortcut's icon to a DOM node (preset glyph or favicon image).
+function shortcutIconNode(sc) {
+  let iconSrc = sc.icon || '';
+  if (iconSrc.startsWith('preset:')) {
+    const paths = WAFFLE_PRESET_ICONS[iconSrc.slice(7)];
+    if (paths) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 16 16');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.4');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.innerHTML = paths;
+      return svg;
+    }
+  }
+  if (!iconSrc) {
+    try { iconSrc = gFav(new URL(sc.url).hostname); } catch (_) {}
+  }
+  const img = document.createElement('img');
+  img.src = iconSrc; img.alt = '';
+  img.onerror = () => { img.style.display = 'none'; };
+  return img;
+}
+
+// Compact quick-access chips on the new-tab page (first handful of shortcuts).
+function renderQuickLinks() {
+  const host = $('nt-quicklinks');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const sc of waffleShortcuts.slice(0, 6)) {
+    const chip = document.createElement('button');
+    chip.className = 'ql-item';
+    chip.title = sc.url;
+    chip.appendChild(shortcutIconNode(sc));
+    const lbl = document.createElement('span');
+    lbl.textContent = sc.label;
+    chip.appendChild(lbl);
+    chip.addEventListener('click', () => navigate(sc.url));
+    host.appendChild(chip);
+  }
 }
 
 function renderWafflePanel() {
