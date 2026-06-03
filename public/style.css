@@ -674,6 +674,36 @@ html, body {
   display: inline-block;
 }
 
+/* Accent picker */
+.accent-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.accent-swatch {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--hover);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  transition: transform .1s, box-shadow .12s;
+}
+.accent-swatch:hover { transform: scale(1.14); }
+.accent-swatch.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.accent-swatch svg { width: 13px; height: 13px; }
+.accent-custom {
+  overflow: hidden;
+  background: conic-gradient(from 0deg, #f33, #fd3, #6f3, #3df, #36f, #f3d, #f33);
+  border-color: transparent;
+}
+.accent-custom input[type="color"] {
+  opacity: 0;
+  width: 200%; height: 200%;
+  margin: -50%;
+  cursor: pointer;
+  border: none; padding: 0; background: none;
+}
+
 /* Cloak grid */
 .cloak-grid {
   display: flex;

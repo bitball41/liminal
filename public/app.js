@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS = {
   tabPosition: 'top',
   customCursor: true,
   ntClock: true,
+  accent: '',
 };
 
 function loadSettings() {
@@ -124,13 +125,14 @@ function createTabIframe() {
 function openTab(url = null) {
   const id = nextTabId++;
   const iframe = createTabIframe();
-  const tab = { id, title: 'New Tab', url: '', favicon: null, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
+  const tab = { id, title: 'New Tab', url: '', favicon: null, loading: false, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
   tabs.push(tab);
 
   // When a proxied page finishes loading, finish the progress bar and pull the
   // real document title + favicon so the tab strip reads like a real browser.
   iframe.addEventListener('load', () => {
     if (!tab.url) return;
+    tab.loading = false;
     if (tab.id === activeTabId) finishProgress();
     refreshTabMeta(tab);
   });
@@ -176,6 +178,10 @@ function activateTab(id) {
     urlBar.value = '';
     searchInput.value = '';
   }
+
+  // Reflect the activated tab's own loading state so the global progress bar
+  // never gets stuck after switching away from a still-loading tab.
+  if (tab.loading) startProgress(); else finishProgress();
 
   updateNavButtons(tab);
   renderTabs();
@@ -261,9 +267,13 @@ function renderTabs() {
 }
 
 // ── Tab metadata + loading progress ───────────────────────────────
-function setTabFavicon(tab, url) {
-  try { tab.favicon = gFav(new URL(url).hostname); }
-  catch (_) { tab.favicon = null; }
+// Derive a tab's title + favicon from a URL in a single parse. An unparseable
+// URL leaves a "Loading…" title and the generic glyph (favicon null).
+function applyUrlMeta(tab, url) {
+  let host = '';
+  try { host = new URL(url).hostname; } catch (_) {}
+  tab.title = host || 'Loading…';
+  tab.favicon = host ? gFav(host) : null;
 }
 
 // Pull the real <title> from the proxied document (same-origin under Scramjet)
@@ -333,11 +343,7 @@ function navigate(url) {
       tab.homeBackUrl = null;
       tab.url = e.url;
       if (tab.id === activeTabId) urlBar.value = e.url;
-      try {
-        const u = new URL(e.url);
-        tab.title = u.hostname || 'Loading…';
-      } catch (_) { tab.title = 'Loading…'; }
-      setTabFavicon(tab, e.url);
+      applyUrlMeta(tab, e.url);
       updateNavButtons(tab);
       renderTabs();
     });
@@ -347,13 +353,11 @@ function navigate(url) {
   tab.navCount++;
   tab.inPageNavCount = 0;
   tab.homeBackUrl = null;
+  tab.loading = true;
   if (tab.id === activeTabId) startProgress();
   tab.frame.go(url);
   urlBar.value = url;
-
-  try { tab.title = new URL(url).hostname || 'Loading…'; }
-  catch (_) { tab.title = 'Loading…'; }
-  setTabFavicon(tab, url);
+  applyUrlMeta(tab, url);
 
   newTab.hidden = true;
   tab.iframe.hidden = false;
@@ -793,6 +797,12 @@ function syncSettingsPanel() {
     btn.classList.toggle('active', btn.dataset.engine === (settings.engine || 'scramjet'));
   });
 
+  // Accent swatches
+  document.querySelectorAll('.accent-swatch[data-accent]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.accent === (settings.accent || ''));
+  });
+  if (settings.accent) $('accent-picker').value = settings.accent;
+
   // Toggles
   $('toggle-about-blank').checked = settings.aboutBlankMode;
   $('toggle-bookmarks').checked   = settings.bookmarksVisible;
@@ -846,6 +856,24 @@ document.querySelectorAll('.theme-btn').forEach(btn => {
     applyTheme();
     syncSettingsPanel();
   });
+});
+
+// Accent swatches
+document.querySelectorAll('.accent-swatch[data-accent]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.accent = btn.dataset.accent;
+    saveSettings();
+    applyAccent();
+    syncSettingsPanel();
+  });
+});
+
+// Custom accent colour picker
+$('accent-picker').addEventListener('input', e => {
+  settings.accent = e.target.value;
+  saveSettings();
+  applyAccent();
+  syncSettingsPanel();
 });
 
 // Cloak buttons
@@ -943,6 +971,15 @@ btnDevtools.addEventListener('click', () => {
 // ── Apply settings ────────────────────────────────────────────────
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+}
+
+// Override the theme's --accent with a user-chosen colour (empty = theme default).
+function applyAccent() {
+  if (settings.accent) {
+    document.documentElement.style.setProperty('--accent', settings.accent);
+  } else {
+    document.documentElement.style.removeProperty('--accent');
+  }
 }
 
 function applyTabCloak() {
@@ -1058,6 +1095,7 @@ function applyClock() {
 
 function applyAllSettings() {
   applyTheme();
+  applyAccent();
   applyTabCloak();
   applyBookmarksBar();
   applyErudaSettings();
@@ -1197,6 +1235,13 @@ function shortcutIconNode(sc) {
   }
   if (!iconSrc) {
     try { iconSrc = gFav(new URL(sc.url).hostname); } catch (_) {}
+  }
+  // No usable icon (e.g. an unparseable URL) — return the generic glyph rather
+  // than an <img src=""> that would refetch the current page.
+  if (!iconSrc) {
+    const span = document.createElement('span');
+    span.innerHTML = PAGE_ICON;
+    return span.firstElementChild || span;
   }
   const img = document.createElement('img');
   img.src = iconSrc; img.alt = '';
