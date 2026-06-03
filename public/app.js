@@ -416,6 +416,25 @@ async function registerSW(swPath, scope) {
   return reg;
 }
 
+// Schedule periodic SW updates exactly once, no matter how many times the
+// engine is (re)initialised (e.g. when switching engines in settings). Without
+// this guard every re-init stacked another 30-minute interval and another
+// visibilitychange listener.
+let activeSWReg = null;
+let swUpdateScheduled = false;
+function scheduleSWUpdate(reg) {
+  // Track the *current* registration so switching engines re-points the
+  // existing interval/listener at the new SW instead of leaving it stuck on
+  // the first engine's registration (or stacking duplicate timers).
+  activeSWReg = reg;
+  if (swUpdateScheduled) return;
+  swUpdateScheduled = true;
+  setInterval(() => { if (activeSWReg) activeSWReg.update().catch(() => {}); }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && activeSWReg) activeSWReg.update().catch(() => {});
+  });
+}
+
 // Resolves to the first URL whose probe returns true, or null if all fail.
 function firstReachable(urls) {
   return new Promise(resolve => {
@@ -487,16 +506,11 @@ async function initEngine(attempt = 1) {
 }
 
 async function initScramjet(attempt = 1) {
-  setStatus('Registering service worker…');
-  const reg = await registerSW('/sw.js', SVC_PREFIX);
-
-  if (attempt === 1) {
-    setInterval(() => reg.update(), 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reg.update();
-    });
-  }
-
+  // Order matters: the ScramjetController must provision the $scramjet
+  // IndexedDB (object stores + config) BEFORE the service worker opens it.
+  // Registering the SW first made both sides open the DB concurrently on a
+  // fresh browser, deadlocking the IDB upgrade so ctrl.init() hung forever
+  // at "Starting engine…". Build the controller first, then register the SW.
   await setupTransport();
   setStatus('Starting engine…');
 
@@ -524,6 +538,13 @@ async function initScramjet(attempt = 1) {
     }
   }
 
+  // Now that the DB is fully provisioned, bring up the service worker. Only
+  // after it is registered and active do we expose the controller — navigating
+  // before the SW controls /scramjet/service/ would hit the network and 404.
+  setStatus('Registering service worker…');
+  const reg = await registerSW('/sw.js', SVC_PREFIX);
+  scheduleSWUpdate(reg);
+
   window.__bardoCtrl = ctrl;
   sessionStorage.removeItem('bardo-sw-fix-attempted');
   setStatus('');
@@ -536,17 +557,11 @@ async function initScramjet(attempt = 1) {
 }
 
 async function initScramjet2(attempt = 1) {
+  await setupTransport();
   setStatus('Registering service worker (Scramjet v2)…');
   const reg = await registerSW('/sw-scramjet2.js', SVC_PREFIX_V2);
+  scheduleSWUpdate(reg);
 
-  if (attempt === 1) {
-    setInterval(() => reg.update(), 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') reg.update();
-    });
-  }
-
-  await setupTransport();
   setStatus('Starting Scramjet v2…');
 
   // v2 uses ScramjetFrame for per-tab navigation instead of a shared controller.
@@ -736,12 +751,21 @@ function syncSettingsPanel() {
   });
 }
 
-const SITE_BASE = 'https://dj9js1p9rozzq.cloudfront.net';
+// Build a fully-qualified proxied service URL for the current engine. Uses the
+// controller's own codec when available so the encoding always matches what the
+// service worker expects; falls back to encodeURIComponent (the default codec).
+function proxiedUrl(rawUrl) {
+  const ctrl = window.__bardoCtrl;
+  const encoded = ctrl && typeof ctrl.encodeUrl === 'function'
+    ? ctrl.encodeUrl(rawUrl)
+    : encodeURIComponent(rawUrl);
+  return location.origin + activeSvcPrefix() + encoded;
+}
 
 btnOpenTab.addEventListener('click', () => {
   const url = getActiveTab()?.url || urlBar.value.trim();
   if (!url) return;
-  window.open(SITE_BASE + SVC_PREFIX + encodeURIComponent(url), '_blank');
+  window.open(proxiedUrl(url), '_blank');
 });
 
 btnMenu.addEventListener('click', openSettings);
