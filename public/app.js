@@ -81,6 +81,9 @@ const DEFAULT_SETTINGS = {
   erudaEnabled: false,
   engine: 'scramjet',
   tabPosition: 'top',
+  customCursor: true,
+  ntClock: true,
+  accent: '',
 };
 
 function loadSettings() {
@@ -122,8 +125,18 @@ function createTabIframe() {
 function openTab(url = null) {
   const id = nextTabId++;
   const iframe = createTabIframe();
-  const tab = { id, title: 'New Tab', url: '', iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
+  const tab = { id, title: 'New Tab', url: '', favicon: null, loading: false, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
   tabs.push(tab);
+
+  // When a proxied page finishes loading, finish the progress bar and pull the
+  // real document title + favicon so the tab strip reads like a real browser.
+  iframe.addEventListener('load', () => {
+    if (!tab.url) return;
+    tab.loading = false;
+    if (tab.id === activeTabId) finishProgress();
+    refreshTabMeta(tab);
+  });
+
   activateTab(id);
   if (url) {
     navigate(url);
@@ -166,6 +179,10 @@ function activateTab(id) {
     searchInput.value = '';
   }
 
+  // Reflect the activated tab's own loading state so the global progress bar
+  // never gets stuck after switching away from a still-loading tab.
+  if (tab.loading) startProgress(); else finishProgress();
+
   updateNavButtons(tab);
   renderTabs();
 }
@@ -187,7 +204,15 @@ function renderTabs() {
 
     const fav = document.createElement('div');
     fav.className = 'tab-favicon';
-    fav.innerHTML = PAGE_ICON;
+    if (tab.favicon) {
+      const img = document.createElement('img');
+      img.src = tab.favicon;
+      img.alt = '';
+      img.onerror = () => { fav.innerHTML = PAGE_ICON; };
+      fav.appendChild(img);
+    } else {
+      fav.innerHTML = PAGE_ICON;
+    }
 
     const title = document.createElement('span');
     title.className = 'tab-title';
@@ -241,6 +266,50 @@ function renderTabs() {
   }
 }
 
+// ── Tab metadata + loading progress ───────────────────────────────
+// Derive a tab's title + favicon from a URL in a single parse. An unparseable
+// URL leaves a "Loading…" title and the generic glyph (favicon null).
+function applyUrlMeta(tab, url) {
+  let host = '';
+  try { host = new URL(url).hostname; } catch (_) {}
+  tab.title = host || 'Loading…';
+  tab.favicon = host ? gFav(host) : null;
+}
+
+// Pull the real <title> from the proxied document (same-origin under Scramjet)
+// so tabs show "YouTube" rather than the bare hostname.
+function refreshTabMeta(tab) {
+  if (!tab) return;
+  try {
+    const doc = tab.iframe.contentWindow?.document;
+    const t = doc?.title?.trim();
+    if (t) tab.title = t;
+  } catch (_) { /* cross-origin or not ready — keep hostname */ }
+  if (tab.id === activeTabId) renderTabs();
+}
+
+let progressTimer = null;
+function startProgress() {
+  const bar = $('progress-bar');
+  if (!bar) return;
+  clearTimeout(progressTimer);
+  bar.classList.remove('done');
+  bar.classList.add('active');
+  bar.style.width = '0%';
+  // Creep toward 75% so navigation always feels responsive, then finish on load.
+  requestAnimationFrame(() => { bar.style.width = '75%'; });
+}
+function finishProgress() {
+  const bar = $('progress-bar');
+  if (!bar || !bar.classList.contains('active')) return;
+  bar.style.width = '100%';
+  bar.classList.add('done');
+  progressTimer = setTimeout(() => {
+    bar.classList.remove('active', 'done');
+    bar.style.width = '0%';
+  }, 320);
+}
+
 // ── URL helpers ───────────────────────────────────────────────────
 function toUrl(s) {
   s = s.trim();
@@ -274,10 +343,7 @@ function navigate(url) {
       tab.homeBackUrl = null;
       tab.url = e.url;
       if (tab.id === activeTabId) urlBar.value = e.url;
-      try {
-        const u = new URL(e.url);
-        tab.title = u.hostname || 'Loading…';
-      } catch (_) { tab.title = 'Loading…'; }
+      applyUrlMeta(tab, e.url);
       updateNavButtons(tab);
       renderTabs();
     });
@@ -287,11 +353,11 @@ function navigate(url) {
   tab.navCount++;
   tab.inPageNavCount = 0;
   tab.homeBackUrl = null;
+  tab.loading = true;
+  if (tab.id === activeTabId) startProgress();
   tab.frame.go(url);
   urlBar.value = url;
-
-  try { tab.title = new URL(url).hostname || 'Loading…'; }
-  catch (_) { tab.title = 'Loading…'; }
+  applyUrlMeta(tab, url);
 
   newTab.hidden = true;
   tab.iframe.hidden = false;
@@ -731,6 +797,12 @@ function syncSettingsPanel() {
     btn.classList.toggle('active', btn.dataset.engine === (settings.engine || 'scramjet'));
   });
 
+  // Accent swatches
+  document.querySelectorAll('.accent-swatch[data-accent]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.accent === (settings.accent || ''));
+  });
+  if (settings.accent) $('accent-picker').value = settings.accent;
+
   // Toggles
   $('toggle-about-blank').checked = settings.aboutBlankMode;
   $('toggle-bookmarks').checked   = settings.bookmarksVisible;
@@ -744,6 +816,8 @@ function syncSettingsPanel() {
 
   // Toggles
   $('toggle-eruda').checked = settings.erudaEnabled;
+  $('toggle-cursor').checked = settings.customCursor;
+  $('toggle-clock').checked  = settings.ntClock;
 
   // Tab position buttons
   document.querySelectorAll('.tab-pos-btn').forEach(btn => {
@@ -782,6 +856,24 @@ document.querySelectorAll('.theme-btn').forEach(btn => {
     applyTheme();
     syncSettingsPanel();
   });
+});
+
+// Accent swatches
+document.querySelectorAll('.accent-swatch[data-accent]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.accent = btn.dataset.accent;
+    saveSettings();
+    applyAccent();
+    syncSettingsPanel();
+  });
+});
+
+// Custom accent colour picker
+$('accent-picker').addEventListener('input', e => {
+  settings.accent = e.target.value;
+  saveSettings();
+  applyAccent();
+  syncSettingsPanel();
 });
 
 // Cloak buttons
@@ -848,6 +940,18 @@ $('toggle-eruda').addEventListener('change', e => {
   applyErudaSettings();
 });
 
+$('toggle-cursor').addEventListener('change', e => {
+  settings.customCursor = e.target.checked;
+  saveSettings();
+  applyCustomCursor();
+});
+
+$('toggle-clock').addEventListener('change', e => {
+  settings.ntClock = e.target.checked;
+  saveSettings();
+  applyClock();
+});
+
 let erudaOpen = false;
 btnDevtools.addEventListener('click', () => {
   if (!window.eruda) {
@@ -867,6 +971,15 @@ btnDevtools.addEventListener('click', () => {
 // ── Apply settings ────────────────────────────────────────────────
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+}
+
+// Override the theme's --accent with a user-chosen colour (empty = theme default).
+function applyAccent() {
+  if (settings.accent) {
+    document.documentElement.style.setProperty('--accent', settings.accent);
+  } else {
+    document.documentElement.style.removeProperty('--accent');
+  }
 }
 
 function applyTabCloak() {
@@ -899,12 +1012,96 @@ function applyTabPosition() {
   }
 }
 
+// ── Custom cursor ─────────────────────────────────────────────────
+const cursorDot  = $('cursor-dot');
+const cursorRing = $('cursor-ring');
+let curMouseX = 0, curMouseY = 0, curRingX = 0, curRingY = 0;
+let cursorRAF = null, cursorShown = false;
+
+const CURSOR_INTERACTIVE =
+  'button, a, input, select, textarea, label, .tab, .bookmark-item, ' +
+  '.waffle-item, .ql-item, .theme-btn, .cloak-btn, .engine-btn, .tab-pos-btn, .sm-tab, .toggle-wrap';
+
+function showCursor() {
+  if (cursorShown) return;
+  cursorShown = true;
+  cursorDot.style.opacity = '1';
+  cursorRing.style.opacity = '1';
+}
+function hideCursor() {
+  if (!cursorShown) return;
+  cursorShown = false;
+  cursorDot.style.opacity = '0';
+  cursorRing.style.opacity = '0';
+}
+function cursorLoop() {
+  curRingX += (curMouseX - curRingX) * 0.2;
+  curRingY += (curMouseY - curRingY) * 0.2;
+  cursorRing.style.transform = `translate(${curRingX}px, ${curRingY}px)`;
+  cursorRAF = requestAnimationFrame(cursorLoop);
+}
+document.addEventListener('mousemove', e => {
+  if (!settings.customCursor) return;
+  curMouseX = e.clientX; curMouseY = e.clientY;
+  cursorDot.style.transform = `translate(${curMouseX}px, ${curMouseY}px)`;
+  showCursor();
+  cursorRing.classList.toggle('hover', !!e.target.closest?.(CURSOR_INTERACTIVE));
+}, { passive: true });
+document.addEventListener('mousedown', () => cursorRing.classList.add('down'));
+document.addEventListener('mouseup',   () => cursorRing.classList.remove('down'));
+// The pointer entering a proxied iframe stops firing parent mousemoves, so hide
+// the overlay there and let the page's own native cursor take over.
+document.addEventListener('mouseover', e => { if (e.target.tagName === 'IFRAME') hideCursor(); });
+document.addEventListener('mouseleave', hideCursor);
+window.addEventListener('blur', hideCursor);
+
+function applyCustomCursor() {
+  if (settings.customCursor) {
+    document.documentElement.classList.add('custom-cursor');
+    if (!cursorRAF) cursorLoop();
+  } else {
+    document.documentElement.classList.remove('custom-cursor');
+    hideCursor();
+    if (cursorRAF) { cancelAnimationFrame(cursorRAF); cursorRAF = null; }
+  }
+}
+
+// ── New-tab clock ─────────────────────────────────────────────────
+let clockTimer = null;
+function tickClock() {
+  const time = $('nt-time'), greet = $('nt-greeting');
+  if (!time || !greet) return;
+  const now = new Date();
+  time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const h = now.getHours();
+  greet.textContent =
+    h < 5  ? 'Good night'   :
+    h < 12 ? 'Good morning' :
+    h < 18 ? 'Good afternoon' :
+             'Good evening';
+}
+function applyClock() {
+  const clock = $('nt-clock');
+  if (!clock) return;
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  if (settings.ntClock) {
+    tickClock();
+    clock.classList.add('visible');
+    clockTimer = setInterval(tickClock, 10000);
+  } else {
+    clock.classList.remove('visible');
+  }
+}
+
 function applyAllSettings() {
   applyTheme();
+  applyAccent();
   applyTabCloak();
   applyBookmarksBar();
   applyErudaSettings();
   applyTabPosition();
+  applyCustomCursor();
+  applyClock();
   renderBookmarks();
 }
 
@@ -951,6 +1148,45 @@ document.addEventListener('keydown', e => {
   window.location.replace(url);
 });
 
+// ── Keyboard shortcuts ────────────────────────────────────────────
+function focusAddress() {
+  const tab = getActiveTab();
+  if (tab && tab.url) { urlBar.focus(); urlBar.select(); }
+  else { searchInput.focus(); searchInput.select(); }
+}
+
+document.addEventListener('keydown', e => {
+  const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+  // Alt+Arrow → history; Alt+1..9 → jump to tab N (chosen over Ctrl to dodge
+  // shortcuts the host browser reserves for its own tabs).
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); btnBack.click(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); btnFwd.click();  return; }
+    if (/^[1-9]$/.test(e.key)) {
+      const t = tabs[+e.key - 1];
+      if (t) { e.preventDefault(); activateTab(t.id); }
+      return;
+    }
+  }
+
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  switch (e.key.toLowerCase()) {
+    case 'l': e.preventDefault(); focusAddress(); break;
+    case 't': e.preventDefault(); openTab(); break;
+    case 'w':
+      if (activeTabId !== null) { e.preventDefault(); closeTab(activeTabId); }
+      break;
+    case 'r':
+      if (!typing) {
+        e.preventDefault();
+        const tab = getActiveTab();
+        if (tab?.url) tab.frame?.reload(); else initEngine();
+      }
+      break;
+  }
+});
+
 // ── Waffle menu ───────────────────────────────────────────────────
 const WAFFLE_PRESET_ICONS = {
   home:     `<path d="M2 7.5L8 2l6 5.5"/><path d="M4 6.5V14h3v-3h2v3h3V6.5"/>`,
@@ -970,11 +1206,65 @@ let waffleShortcuts = [];
 async function loadShortcuts() {
   try {
     const resp = await fetch('/shortcuts.json');
-    if (!resp.ok) return;
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     waffleShortcuts = Array.isArray(data) ? data.filter(s => s.url) : [];
     renderWafflePanel();
-  } catch (_) {}
+    renderQuickLinks();
+  } catch (e) {
+    console.error('[bardo] failed to load shortcuts:', e);
+  }
+}
+
+// Resolve a shortcut's icon to a DOM node (preset glyph or favicon image).
+function shortcutIconNode(sc) {
+  let iconSrc = sc.icon || '';
+  if (iconSrc.startsWith('preset:')) {
+    const paths = WAFFLE_PRESET_ICONS[iconSrc.slice(7)];
+    if (paths) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 16 16');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.4');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.innerHTML = paths;
+      return svg;
+    }
+  }
+  if (!iconSrc) {
+    try { iconSrc = gFav(new URL(sc.url).hostname); } catch (_) {}
+  }
+  // No usable icon (e.g. an unparseable URL) — return the generic glyph rather
+  // than an <img src=""> that would refetch the current page.
+  if (!iconSrc) {
+    const span = document.createElement('span');
+    span.innerHTML = PAGE_ICON;
+    return span.firstElementChild || span;
+  }
+  const img = document.createElement('img');
+  img.src = iconSrc; img.alt = '';
+  img.onerror = () => { img.style.display = 'none'; };
+  return img;
+}
+
+// Compact quick-access chips on the new-tab page (first handful of shortcuts).
+function renderQuickLinks() {
+  const host = $('nt-quicklinks');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const sc of waffleShortcuts.slice(0, 6)) {
+    const chip = document.createElement('button');
+    chip.className = 'ql-item';
+    chip.title = sc.url;
+    chip.appendChild(shortcutIconNode(sc));
+    const lbl = document.createElement('span');
+    lbl.textContent = sc.label;
+    chip.appendChild(lbl);
+    chip.addEventListener('click', () => navigate(sc.url));
+    host.appendChild(chip);
+  }
 }
 
 function renderWafflePanel() {
