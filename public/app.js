@@ -122,8 +122,17 @@ function createTabIframe() {
 function openTab(url = null) {
   const id = nextTabId++;
   const iframe = createTabIframe();
-  const tab = { id, title: 'New Tab', url: '', iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
+  const tab = { id, title: 'New Tab', url: '', favicon: null, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
   tabs.push(tab);
+
+  // When a proxied page finishes loading, finish the progress bar and pull the
+  // real document title + favicon so the tab strip reads like a real browser.
+  iframe.addEventListener('load', () => {
+    if (!tab.url) return;
+    if (tab.id === activeTabId) finishProgress();
+    refreshTabMeta(tab);
+  });
+
   activateTab(id);
   if (url) {
     navigate(url);
@@ -187,7 +196,15 @@ function renderTabs() {
 
     const fav = document.createElement('div');
     fav.className = 'tab-favicon';
-    fav.innerHTML = PAGE_ICON;
+    if (tab.favicon) {
+      const img = document.createElement('img');
+      img.src = tab.favicon;
+      img.alt = '';
+      img.onerror = () => { fav.innerHTML = PAGE_ICON; };
+      fav.appendChild(img);
+    } else {
+      fav.innerHTML = PAGE_ICON;
+    }
 
     const title = document.createElement('span');
     title.className = 'tab-title';
@@ -241,6 +258,46 @@ function renderTabs() {
   }
 }
 
+// ── Tab metadata + loading progress ───────────────────────────────
+function setTabFavicon(tab, url) {
+  try { tab.favicon = gFav(new URL(url).hostname); }
+  catch (_) { tab.favicon = null; }
+}
+
+// Pull the real <title> from the proxied document (same-origin under Scramjet)
+// so tabs show "YouTube" rather than the bare hostname.
+function refreshTabMeta(tab) {
+  if (!tab) return;
+  try {
+    const doc = tab.iframe.contentWindow?.document;
+    const t = doc?.title?.trim();
+    if (t) tab.title = t;
+  } catch (_) { /* cross-origin or not ready — keep hostname */ }
+  if (tab.id === activeTabId) renderTabs();
+}
+
+let progressTimer = null;
+function startProgress() {
+  const bar = $('progress-bar');
+  if (!bar) return;
+  clearTimeout(progressTimer);
+  bar.classList.remove('done');
+  bar.classList.add('active');
+  bar.style.width = '0%';
+  // Creep toward 75% so navigation always feels responsive, then finish on load.
+  requestAnimationFrame(() => { bar.style.width = '75%'; });
+}
+function finishProgress() {
+  const bar = $('progress-bar');
+  if (!bar || !bar.classList.contains('active')) return;
+  bar.style.width = '100%';
+  bar.classList.add('done');
+  progressTimer = setTimeout(() => {
+    bar.classList.remove('active', 'done');
+    bar.style.width = '0%';
+  }, 320);
+}
+
 // ── URL helpers ───────────────────────────────────────────────────
 function toUrl(s) {
   s = s.trim();
@@ -278,6 +335,7 @@ function navigate(url) {
         const u = new URL(e.url);
         tab.title = u.hostname || 'Loading…';
       } catch (_) { tab.title = 'Loading…'; }
+      setTabFavicon(tab, e.url);
       updateNavButtons(tab);
       renderTabs();
     });
@@ -287,11 +345,13 @@ function navigate(url) {
   tab.navCount++;
   tab.inPageNavCount = 0;
   tab.homeBackUrl = null;
+  if (tab.id === activeTabId) startProgress();
   tab.frame.go(url);
   urlBar.value = url;
 
   try { tab.title = new URL(url).hostname || 'Loading…'; }
   catch (_) { tab.title = 'Loading…'; }
+  setTabFavicon(tab, url);
 
   newTab.hidden = true;
   tab.iframe.hidden = false;

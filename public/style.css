@@ -157,8 +157,11 @@ html, body {
 .tab-favicon {
   width: 14px; height: 14px; flex-shrink: 0;
   opacity: 0.5;
+  display: flex; align-items: center; justify-content: center;
 }
 .tab-favicon svg { width: 14px; height: 14px; }
+.tab-favicon img { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; }
+.tab.active .tab-favicon { opacity: 1; }
 
 .tab-title {
   flex: 1;
@@ -247,6 +250,25 @@ html, body {
   background: var(--bg);
 }
 #url-bar::placeholder { color: var(--muted); }
+
+/* ── Navigation progress bar ─────────────────────────────────────── */
+#progress-bar {
+  position: absolute;
+  left: 0; bottom: -1px;
+  height: 2px;
+  width: 0;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    var(--accent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+  opacity: 0;
+  border-radius: 0 2px 2px 0;
+  pointer-events: none;
+  z-index: 102;
+  transition: width .5s cubic-bezier(.25,.8,.3,1), opacity .25s;
+}
+#progress-bar.active { opacity: 1; }
+#progress-bar.done { transition: width .18s ease-out, opacity .3s .15s; }
 
 /* ── Waffle menu ─────────────────────────────────────────────────── */
 #waffle-panel {
