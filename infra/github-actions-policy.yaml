@@ -51,12 +51,6 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${GitHubRepo}-github-deploy
-      # Elastic Beanstalk performs autoscaling/EC2/ELB/CloudFormation describes
-      # and EB-bucket access as the deploying principal during UpdateEnvironment,
-      # which the scoped inline policy below can't reasonably enumerate. Grant the
-      # AWS-managed EB policy so deploys don't fail piecemeal on missing actions.
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess-AWSElasticBeanstalk
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -97,9 +91,52 @@ Resources:
                 Effect: Allow
                 Action:
                   - elasticbeanstalk:CreateApplicationVersion
+                  - elasticbeanstalk:CreateStorageLocation
                   - elasticbeanstalk:UpdateEnvironment
                   - elasticbeanstalk:DescribeEnvironments
+                  - elasticbeanstalk:DescribeEnvironmentResources
+                  - elasticbeanstalk:DescribeEnvironmentHealth
+                  - elasticbeanstalk:DescribeInstancesHealth
+                  - elasticbeanstalk:DescribeEvents
                   - elasticbeanstalk:DescribeApplicationVersions
+                  - elasticbeanstalk:DescribeConfigurationSettings
+                  - elasticbeanstalk:DescribeConfigurationOptions
+                  - elasticbeanstalk:DescribeEnvironmentManagedActions
+                  - elasticbeanstalk:DescribeEnvironmentManagedActionHistory
+                  - elasticbeanstalk:RequestEnvironmentInfo
+                  - elasticbeanstalk:RetrieveEnvironmentInfo
+                  - elasticbeanstalk:ListPlatformVersions
+                  - elasticbeanstalk:ListAvailableSolutionStacks
+                Resource: '*'
+
+              # ── EB deploy dependencies ───────────────────────────────────
+              # During UpdateEnvironment, EB performs these queries as the
+              # deploying principal. All read-only describes except the
+              # CloudWatch/SNS actions EB uses for health alarms + notifications.
+              # Deliberately NO iam:* write actions, so there is no
+              # privilege-escalation path even if the runner is compromised
+              # (this replaces the broad AdministratorAccess-AWSElasticBeanstalk
+              # managed policy, which granted iam:CreateRole/AttachRolePolicy).
+              - Sid: ElasticBeanstalkDependencies
+                Effect: Allow
+                Action:
+                  - autoscaling:Describe*
+                  - ec2:Describe*
+                  - elasticloadbalancing:Describe*
+                  - cloudformation:GetTemplate
+                  - cloudformation:ListStackResources
+                  - cloudwatch:Describe*
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - sns:Get*
+                  - sns:List*
+                  - sns:CreateTopic
+                  - sns:Subscribe
+                  - sns:SetTopicAttributes
+                  - logs:Describe*
+                  - logs:Get*
                 Resource: '*'
 
               # ── CloudFormation: deploy LiminalStack ──────────────────────
