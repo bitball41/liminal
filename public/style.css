@@ -783,6 +783,34 @@ html, body {
 }
 .action-btn:hover { background: var(--active); border-color: var(--muted); }
 
+/* Keyboard shortcut reference (Advanced settings) */
+.shortcut-list { display: flex; flex-direction: column; gap: 6px; }
+.shortcut-row {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+}
+.shortcut-row > span { flex: 1; color: var(--muted); }
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+kbd.kbd-inline {
+  min-width: 0;
+  padding: 0 4px;
+  border-bottom-width: 1px;
+}
+
 /* Toggle switch */
 .toggle-wrap {
   position: relative;
