@@ -71,12 +71,17 @@ Resources:
             Statement:
 
               # ── S3: upload EB source bundle ──────────────────────────────
+              # EB reads the bundle object's ACL during deploy, so GetObjectAcl
+              # (and PutObjectAcl on upload) are required in addition to Get/Put.
               - Sid: S3SourceBundle
                 Effect: Allow
                 Action:
                   - s3:PutObject
+                  - s3:PutObjectAcl
                   - s3:GetObject
+                  - s3:GetObjectAcl
                   - s3:GetBucketLocation
+                  - s3:ListBucket
                 Resource:
                   - !Sub arn:aws:s3:::${EBBucket}
                   - !Sub arn:aws:s3:::${EBBucket}/*
@@ -86,9 +91,52 @@ Resources:
                 Effect: Allow
                 Action:
                   - elasticbeanstalk:CreateApplicationVersion
+                  - elasticbeanstalk:CreateStorageLocation
                   - elasticbeanstalk:UpdateEnvironment
                   - elasticbeanstalk:DescribeEnvironments
+                  - elasticbeanstalk:DescribeEnvironmentResources
+                  - elasticbeanstalk:DescribeEnvironmentHealth
+                  - elasticbeanstalk:DescribeInstancesHealth
+                  - elasticbeanstalk:DescribeEvents
                   - elasticbeanstalk:DescribeApplicationVersions
+                  - elasticbeanstalk:DescribeConfigurationSettings
+                  - elasticbeanstalk:DescribeConfigurationOptions
+                  - elasticbeanstalk:DescribeEnvironmentManagedActions
+                  - elasticbeanstalk:DescribeEnvironmentManagedActionHistory
+                  - elasticbeanstalk:RequestEnvironmentInfo
+                  - elasticbeanstalk:RetrieveEnvironmentInfo
+                  - elasticbeanstalk:ListPlatformVersions
+                  - elasticbeanstalk:ListAvailableSolutionStacks
+                Resource: '*'
+
+              # ── EB deploy dependencies ───────────────────────────────────
+              # During UpdateEnvironment, EB performs these queries as the
+              # deploying principal. All read-only describes except the
+              # CloudWatch/SNS actions EB uses for health alarms + notifications.
+              # Deliberately NO iam:* write actions, so there is no
+              # privilege-escalation path even if the runner is compromised
+              # (this replaces the broad AdministratorAccess-AWSElasticBeanstalk
+              # managed policy, which granted iam:CreateRole/AttachRolePolicy).
+              - Sid: ElasticBeanstalkDependencies
+                Effect: Allow
+                Action:
+                  - autoscaling:Describe*
+                  - ec2:Describe*
+                  - elasticloadbalancing:Describe*
+                  - cloudformation:GetTemplate
+                  - cloudformation:ListStackResources
+                  - cloudwatch:Describe*
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - sns:Get*
+                  - sns:List*
+                  - sns:CreateTopic
+                  - sns:Subscribe
+                  - sns:SetTopicAttributes
+                  - logs:Describe*
+                  - logs:Get*
                 Resource: '*'
 
               # ── CloudFormation: deploy LiminalStack ──────────────────────
