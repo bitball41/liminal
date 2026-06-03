@@ -1110,6 +1110,45 @@ document.addEventListener('keydown', e => {
   window.location.replace(url);
 });
 
+// ── Keyboard shortcuts ────────────────────────────────────────────
+function focusAddress() {
+  const tab = getActiveTab();
+  if (tab && tab.url) { urlBar.focus(); urlBar.select(); }
+  else { searchInput.focus(); searchInput.select(); }
+}
+
+document.addEventListener('keydown', e => {
+  const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+  // Alt+Arrow → history; Alt+1..9 → jump to tab N (chosen over Ctrl to dodge
+  // shortcuts the host browser reserves for its own tabs).
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); btnBack.click(); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); btnFwd.click();  return; }
+    if (/^[1-9]$/.test(e.key)) {
+      const t = tabs[+e.key - 1];
+      if (t) { e.preventDefault(); activateTab(t.id); }
+      return;
+    }
+  }
+
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  switch (e.key.toLowerCase()) {
+    case 'l': e.preventDefault(); focusAddress(); break;
+    case 't': e.preventDefault(); openTab(); break;
+    case 'w':
+      if (activeTabId !== null) { e.preventDefault(); closeTab(activeTabId); }
+      break;
+    case 'r':
+      if (!typing) {
+        e.preventDefault();
+        const tab = getActiveTab();
+        if (tab?.url) tab.frame?.reload(); else initEngine();
+      }
+      break;
+  }
+});
+
 // ── Waffle menu ───────────────────────────────────────────────────
 const WAFFLE_PRESET_ICONS = {
   home:     `<path d="M2 7.5L8 2l6 5.5"/><path d="M4 6.5V14h3v-3h2v3h3V6.5"/>`,

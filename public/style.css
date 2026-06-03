@@ -199,7 +199,9 @@ html, body {
   transition: color .1s;
 }
 #btn-new-tab svg { width: 13px; height: 13px; }
+#btn-new-tab { transition: color .1s, transform .08s; }
 #btn-new-tab:hover { color: var(--text); }
+#btn-new-tab:active { transform: scale(.85); }
 
 /* ── Browser chrome ──────────────────────────────────────────────── */
 #chrome {
@@ -221,11 +223,11 @@ html, body {
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: background .1s;
+  transition: background .1s, transform .08s;
 }
 .nav-btn svg { width: 15px; height: 15px; }
 .nav-btn:hover:not(:disabled) { background: var(--hover); }
-.nav-btn:active:not(:disabled) { background: var(--active); }
+.nav-btn:active:not(:disabled) { background: var(--active); transform: scale(.9); }
 .nav-btn:disabled { color: var(--muted); cursor: default; }
 
 #nav-btns { display: flex; gap: 2px; }
