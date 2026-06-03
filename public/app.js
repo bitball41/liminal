@@ -420,13 +420,18 @@ async function registerSW(swPath, scope) {
 // engine is (re)initialised (e.g. when switching engines in settings). Without
 // this guard every re-init stacked another 30-minute interval and another
 // visibilitychange listener.
+let activeSWReg = null;
 let swUpdateScheduled = false;
 function scheduleSWUpdate(reg) {
+  // Track the *current* registration so switching engines re-points the
+  // existing interval/listener at the new SW instead of leaving it stuck on
+  // the first engine's registration (or stacking duplicate timers).
+  activeSWReg = reg;
   if (swUpdateScheduled) return;
   swUpdateScheduled = true;
-  setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+  setInterval(() => { if (activeSWReg) activeSWReg.update().catch(() => {}); }, 30 * 60 * 1000);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    if (document.visibilityState === 'visible' && activeSWReg) activeSWReg.update().catch(() => {});
   });
 }
 
