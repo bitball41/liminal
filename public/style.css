@@ -791,6 +791,8 @@ html, body {
   color: var(--text);
 }
 .shortcut-row > span { flex: 1; color: var(--muted); }
+/* Keep keycaps bright but the +/–// connectors muted, and never wrap a combo. */
+.shortcut-keys { flex-shrink: 0; white-space: nowrap; color: var(--muted); }
 kbd {
   display: inline-block;
   min-width: 18px;
