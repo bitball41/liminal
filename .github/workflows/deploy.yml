@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Deploy target is pinned here (these aren't secrets). Point them at the
+# Elastic Beanstalk application/environment that should receive the build.
+env:
+  EB_APP_NAME: liminal-axis
+  EB_ENV_NAME: liminal-axis-env
+
 jobs:
   deploy:
     name: Deploy to Elastic Beanstalk + CloudFront
@@ -46,29 +52,29 @@ jobs:
       - name: Create new EB application version
         run: |
           aws elasticbeanstalk create-application-version \
-            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --application-name "${{ env.EB_APP_NAME }}" \
             --version-label "${{ github.run_id }}" \
             --source-bundle S3Bucket="${{ secrets.EB_S3_BUCKET }}",S3Key="liminal-${{ github.run_id }}.zip"
 
       - name: Deploy to Elastic Beanstalk
         run: |
           aws elasticbeanstalk update-environment \
-            --application-name "${{ secrets.EB_APP_NAME }}" \
-            --environment-name "${{ secrets.EB_ENV_NAME }}" \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-name "${{ env.EB_ENV_NAME }}" \
             --version-label "${{ github.run_id }}"
 
       - name: Wait for EB environment to be healthy
         run: |
           aws elasticbeanstalk wait environment-updated \
-            --application-name "${{ secrets.EB_APP_NAME }}" \
-            --environment-name "${{ secrets.EB_ENV_NAME }}"
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-name "${{ env.EB_ENV_NAME }}"
 
       - name: Resolve EB environment URL
         id: eb_url
         run: |
           CNAME=$(aws elasticbeanstalk describe-environments \
-            --application-name "${{ secrets.EB_APP_NAME }}" \
-            --environment-name "${{ secrets.EB_ENV_NAME }}" \
+            --application-name "${{ env.EB_APP_NAME }}" \
+            --environment-name "${{ env.EB_ENV_NAME }}" \
             --query "Environments[0].CNAME" \
             --output text)
           echo "cname=$CNAME" >> "$GITHUB_OUTPUT"
