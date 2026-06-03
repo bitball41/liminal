@@ -51,6 +51,12 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${GitHubRepo}-github-deploy
+      # Elastic Beanstalk performs autoscaling/EC2/ELB/CloudFormation describes
+      # and EB-bucket access as the deploying principal during UpdateEnvironment,
+      # which the scoped inline policy below can't reasonably enumerate. Grant the
+      # AWS-managed EB policy so deploys don't fail piecemeal on missing actions.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess-AWSElasticBeanstalk
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -71,12 +77,17 @@ Resources:
             Statement:
 
               # ── S3: upload EB source bundle ──────────────────────────────
+              # EB reads the bundle object's ACL during deploy, so GetObjectAcl
+              # (and PutObjectAcl on upload) are required in addition to Get/Put.
               - Sid: S3SourceBundle
                 Effect: Allow
                 Action:
                   - s3:PutObject
+                  - s3:PutObjectAcl
                   - s3:GetObject
+                  - s3:GetObjectAcl
                   - s3:GetBucketLocation
+                  - s3:ListBucket
                 Resource:
                   - !Sub arn:aws:s3:::${EBBucket}
                   - !Sub arn:aws:s3:::${EBBucket}/*
