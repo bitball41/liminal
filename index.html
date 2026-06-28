@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' wss: https:; frame-src 'self' blob: data:; worker-src 'self' blob:; img-src 'self' data: https:;" />
+  <title>Bardo</title>
+  <!-- Unbounded (display typeface) — used only for the brand wordmark and
+       section headings; body/UI text stays on the system font. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400..800&display=swap" />
+  <link rel="icon" id="favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><path d='M8 34 L8 19 Q8 6 20 6 Q32 6 32 19 L32 34' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round'/><line x1='4' y1='34' x2='36' y2='34' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>" />
+  <!-- Warm the proxy runtime during HTML parse so the ~500 kB Scramjet wasm and
+       the bare-mux worker are already downloading before the React module boots
+       the engine. These are same-origin and HTTP-cached, so a preload only moves
+       the fetch earlier; it never costs an extra network round trip. -->
+  <link rel="preload" href="/scramjet/scramjet.wasm.wasm" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="/scramjet/scramjet.all.js" as="script" />
+  <link rel="preload" href="/baremux/worker.js" as="worker" />
+  <link rel="preload" href="/shortcuts.json" as="fetch" crossorigin="anonymous" />
+  <!-- About:blank launcher — runs synchronously on page parse so it fires before the
+       popup blocker activates and before React hydrates. Ported verbatim from the
+       legacy app; React reads the flags it sets via window.__bardoAb*. -->
+  <script>
+  (function(){
+    try {
+      var s = JSON.parse(localStorage.getItem('bardo-settings') || '{}');
+      if (!s.aboutBlankMode) return;
+      if (window !== window.top) return;
+      if (sessionStorage.getItem('bardo-ab')) return;
+      sessionStorage.setItem('bardo-ab', '1');
+      var src = location.href;
+      var w = window.open('about:blank', '_blank');
+      if (w) {
+        var shell = '<!DOCTYPE html><html><head><title></title><style>*{margin:0;padding:0}html,body,iframe{display:block;width:100%;height:100%;border:none;overflow:hidden}</style>' +
+          '</he' + 'ad><body><iframe src="' + encodeURI(src) + '"></iframe></bo' + 'dy></html>';
+        w.document.write(shell);
+        w.document.close();
+        window.__bardoAbLaunched = true;
+      } else {
+        window.__bardoAbBlocked = true;
+      }
+    } catch(e) {}
+  })();
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- Proxy engine globals ($scramjetLoadController, BareMux). Served by Express
+       (proxied to it in dev). Must load before the React module touches them. -->
+  <script src="/scramjet/scramjet.all.js" defer></script>
+  <script src="/baremux/index.js" defer></script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

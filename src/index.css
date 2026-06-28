@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Tailwind utilities use Bardo's existing runtime theme variables. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="slate"], [data-theme="graphite"], [data-theme="macchiato"], [data-theme="mocha"], [data-theme="space"], [data-theme="midnight"], [data-theme="aurora"], [data-theme="forest"], [data-theme="crimson"], [data-theme="ember"], [data-theme="rose"]) *);
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-muted: var(--hover);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--accent);
+}

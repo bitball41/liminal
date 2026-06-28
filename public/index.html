@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bardo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
   <link rel="icon" id="favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><path d='M8 34 L8 19 Q8 6 20 6 Q32 6 32 19 L32 34' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round'/><line x1='4' y1='34' x2='36' y2='34' stroke='white' stroke-width='2.5' stroke-linecap='round'/></svg>">
   <link rel="stylesheet" href="style.css">
   <!-- About:blank launcher — runs synchronously on page parse so it fires before popup blocker activates -->
@@ -65,6 +68,9 @@
     <button class="nav-btn" id="btn-devtools" title="Developer tools" style="display:none">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,5 1,8 4,11"/><polyline points="12,5 15,8 12,11"/><line x1="9.5" y1="2.5" x2="6.5" y2="13.5"/></svg>
     </button>
+    <button class="nav-btn" id="btn-history" title="History">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5a5 5 0 1 0 4.7 3.3"/><polyline points="8,1.5 8,3.5 10,3.5"/><polyline points="8,5 8,8 10.5,9.3"/></svg>
+    </button>
     <button class="nav-btn" id="btn-waffle" title="Shortcuts">
       <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="3.5" r="1.3"/><circle cx="8" cy="3.5" r="1.3"/><circle cx="12.5" cy="3.5" r="1.3"/><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/><circle cx="3.5" cy="12.5" r="1.3"/><circle cx="8" cy="12.5" r="1.3"/><circle cx="12.5" cy="12.5" r="1.3"/></svg>
     </button>
@@ -110,6 +116,10 @@
     <!-- Quick links (populated from shortcuts.json) -->
     <div id="nt-quicklinks"></div>
 
+    <!-- Optional widgets — anchored to the bottom corners (filled by app.js) -->
+    <div id="nt-widgets-left" class="nt-corner"></div>
+    <div id="nt-widgets-right" class="nt-corner"></div>
+
     <button id="btn-stealth-launch" class="stealth-launch-btn" style="display:none">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 2C4.5 2 1.5 5 1.5 8s3 6 6.5 6 6.5-3 6.5-6-3-6-6.5-6z"/><circle cx="8" cy="8" r="2.5"/></svg>
       Open in stealth tab
@@ -118,6 +128,26 @@
 
   <!-- Waffle shortcut panel -->
   <div id="waffle-panel"></div>
+
+  <!-- Dedicated History page -->
+  <div id="history-page">
+    <div class="hp-header">
+      <button id="btn-history-back" class="nav-btn" title="Close history">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10 3L5 8l5 5V3z"/></svg>
+      </button>
+      <h1>History</h1>
+      <div class="hp-search-wrap">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4"/><line x1="9.7" y1="9.7" x2="13.5" y2="13.5"/></svg>
+        <input type="text" id="hp-search" placeholder="Search history" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="hp-body">
+      <div class="hp-toolbar">
+        <button id="hp-clear-all" class="hp-clear-btn">Clear browsing data</button>
+      </div>
+      <div id="hp-list" class="hp-list"></div>
+    </div>
+  </div>
 
   <!-- Settings modal -->
   <div id="settings-overlay">
@@ -137,9 +167,17 @@
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="2.5"/><line x1="8" y1="13.5" x2="8" y2="15"/><line x1="1" y1="8" x2="2.5" y2="8"/><line x1="13.5" y1="8" x2="15" y2="8"/><line x1="3.4" y1="3.4" x2="4.4" y2="4.4"/><line x1="11.6" y1="11.6" x2="12.6" y2="12.6"/><line x1="3.4" y1="12.6" x2="4.4" y2="11.6"/><line x1="11.6" y1="4.4" x2="12.6" y2="3.4"/></svg>
             Appearance
           </button>
+          <button class="sm-tab" data-tab="widgets">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1"/><rect x="9" y="9" width="5.5" height="5.5" rx="1"/></svg>
+            Widgets
+          </button>
           <button class="sm-tab" data-tab="privacy">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2L3 4.5v3.6c0 3 2.1 5.6 5 6.4 2.9-.8 5-3.4 5-6.4V4.5L8 2z"/></svg>
             Privacy
+          </button>
+          <button class="sm-tab" data-tab="history">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5a5 5 0 1 0 4.7 3.3"/><polyline points="8,1.5 8,3.5 10,3.5"/><polyline points="8,5 8,8 10.5,9.3"/></svg>
+            History
           </button>
           <button class="sm-tab" data-tab="cloaker">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
@@ -171,55 +209,34 @@
 
           <!-- Appearance -->
           <div class="sm-pane active" data-pane="appearance">
-            <div class="pane-label">Interface</div>
-            <label class="setting-row toggle-row" style="margin-bottom:10px">
-              <div class="setting-info">
-                <span class="setting-name">Custom cursor</span>
-                <span class="setting-hint">Accent dot with a trailing ring that reacts to buttons and links</span>
-              </div>
-              <div class="toggle-wrap">
-                <input type="checkbox" id="toggle-cursor" class="toggle-input">
-                <span class="toggle-track"></span>
-              </div>
-            </label>
-            <label class="setting-row toggle-row" style="margin-bottom:18px">
-              <div class="setting-info">
-                <span class="setting-name">New-tab clock</span>
-                <span class="setting-hint">Show a live clock and greeting on the new-tab page</span>
-              </div>
-              <div class="toggle-wrap">
-                <input type="checkbox" id="toggle-clock" class="toggle-input">
-                <span class="toggle-track"></span>
-              </div>
-            </label>
             <div class="pane-label">Theme</div>
             <div class="theme-grid">
               <button class="theme-btn" data-theme="dark">
-                <span class="theme-swatch" style="background:#111;outline:1px solid #333"></span>Dark
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#4466ff,transparent 72%),#111;outline:1px solid #333"></span>Dark
               </button>
               <button class="theme-btn" data-theme="space">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#09003d 0%,#1c006a 100%)"></span>Deep Space
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#7c5fe6,transparent 72%),#09003d"></span>Deep Space
               </button>
               <button class="theme-btn" data-theme="midnight">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#080d1a 0%,#0d1a38 100%)"></span>Midnight
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#4488ff,transparent 72%),#080d1a"></span>Midnight
               </button>
               <button class="theme-btn" data-theme="aurora">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#0a0a14 0%,#1a0831 100%)"></span>Aurora
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#8855ff,transparent 72%),#0a0a14"></span>Aurora
               </button>
               <button class="theme-btn" data-theme="light">
-                <span class="theme-swatch" style="background:#f0f2f5;outline:1px solid #c0c0ce"></span>Light
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#4455ee,transparent 72%),#f0f2f5;outline:1px solid #c0c0ce"></span>Light
               </button>
               <button class="theme-btn" data-theme="forest">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#020d04 0%,#0a2814 100%)"></span>Forest
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#30c55a,transparent 72%),#020d04"></span>Forest
               </button>
               <button class="theme-btn" data-theme="crimson">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0202 0%,#2a0808 100%)"></span>Crimson
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#e03838,transparent 72%),#0d0202"></span>Crimson
               </button>
               <button class="theme-btn" data-theme="ember">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0500 0%,#2a1400 100%)"></span>Ember
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#e07820,transparent 72%),#0d0500"></span>Ember
               </button>
               <button class="theme-btn" data-theme="rose">
-                <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0208 0%,#2a0820 100%)"></span>Rose
+                <span class="theme-swatch" style="background:radial-gradient(circle at 70% 72%,#e03880,transparent 72%),#0d0208"></span>Rose
               </button>
             </div>
 
@@ -239,10 +256,134 @@
                 <input type="color" id="accent-picker" value="#4466ff">
               </label>
             </div>
+
+            <div class="pane-label" style="margin-top:18px">Background</div>
+            <p class="pane-hint">Sets the backdrop behind the new-tab page.</p>
+            <div class="bg-grid">
+              <button class="bg-btn" data-bg="none">
+                <span class="bg-swatch bg-swatch-none"></span>None
+              </button>
+              <button class="bg-btn" data-bg="gradient">
+                <span class="bg-swatch bg-swatch-gradient"></span>Accent glow
+              </button>
+              <label class="bg-btn bg-upload" title="Upload an image">
+                <span class="bg-swatch bg-swatch-image">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1"/><path d="M3 12l3.5-3.5L9 11l2-2 2 2"/></svg>
+                </span>Image
+                <input type="file" id="wallpaper-file" accept="image/*" hidden>
+              </label>
+            </div>
+            <button id="btn-wallpaper-remove" class="action-btn" style="display:none;margin-top:8px">Remove image</button>
+          </div>
+
+          <!-- Widgets -->
+          <div class="sm-pane" data-pane="widgets">
+            <div class="pane-label">New-tab Page</div>
+            <p class="pane-hint">Toggle the pieces that show on the new-tab page.</p>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">Clock &amp; greeting</span>
+                <span class="setting-hint">Live clock and time-of-day greeting</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-clock" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row" style="margin-bottom:18px">
+              <div class="setting-info">
+                <span class="setting-name">Quick links</span>
+                <span class="setting-hint">Shortcut buttons under the search bar</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-quicklinks" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+
+            <div class="pane-label">Widget Panel</div>
+            <p class="pane-hint">A tidy column under the search bar. All off by default.</p>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">Date</span>
+                <span class="setting-hint">Day of the week and full date</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-widget-date" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">Weather</span>
+                <span class="setting-hint">Local conditions, no permission prompt</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-widget-weather" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">To-do list</span>
+                <span class="setting-hint">A quick checklist that saves on this device</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-widget-todo" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row" style="margin-bottom:10px">
+              <div class="setting-info">
+                <span class="setting-name">Focus timer</span>
+                <span class="setting-hint">A 25-minute Pomodoro countdown</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-widget-pomodoro" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Quick notes</span>
+                <span class="setting-hint">A scratchpad that saves as you type</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-widget-notes" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+          </div>
+
+          <!-- History -->
+          <div class="sm-pane" data-pane="history">
+            <div class="pane-label">Browsing History</div>
+            <label class="setting-row toggle-row" style="margin-bottom:12px">
+              <div class="setting-info">
+                <span class="setting-name">Save history</span>
+                <span class="setting-hint">Stored only on this device — never uploaded</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-history" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
+            <button id="btn-open-history" class="action-btn">Open History Page</button>
           </div>
 
           <!-- Privacy -->
           <div class="sm-pane" data-pane="privacy">
+            <div class="pane-label">Session</div>
+            <label class="setting-row toggle-row" style="margin-bottom:18px">
+              <div class="setting-info">
+                <span class="setting-name">Restore tabs</span>
+                <span class="setting-hint">Reopen your previous tabs the next time you return</span>
+              </div>
+              <div class="toggle-wrap">
+                <input type="checkbox" id="toggle-restore" class="toggle-input">
+                <span class="toggle-track"></span>
+              </div>
+            </label>
             <div class="pane-label">About:blank Launcher</div>
             <label class="setting-row toggle-row">
               <div class="setting-info">
@@ -254,6 +395,7 @@
                 <span class="toggle-track"></span>
               </div>
             </label>
+            <p class="pane-hint" style="margin-top:14px">Your panic key also wipes saved tabs, history and notes when triggered.</p>
           </div>
 
           <!-- Tab Cloaker -->
@@ -394,6 +536,7 @@
               <div class="shortcut-row"><span>Switch to tab 1–9</span><div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>1</kbd>–<kbd>9</kbd></div></div>
               <div class="shortcut-row"><span>Back / forward</span><div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></div></div>
               <div class="shortcut-row"><span>New tab</span><div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>T</kbd></div></div>
+              <div class="shortcut-row"><span>Open history</span><div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>H</kbd></div></div>
               <div class="shortcut-row"><span>Close tab</span><div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>W</kbd></div></div>
               <div class="shortcut-row"><span>Focus address bar</span><div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>L</kbd></div></div>
               <div class="shortcut-row"><span>Reload page</span><div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>R</kbd></div></div>
@@ -405,10 +548,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Custom cursor (accent dot + trailing ring) -->
-  <div id="cursor-ring"></div>
-  <div id="cursor-dot"></div>
 
   <script src="/scramjet/scramjet.all.js" defer></script>
   <script src="/baremux/index.js"         defer></script>

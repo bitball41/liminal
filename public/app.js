@@ -27,6 +27,13 @@ const settingsOverlay  = $('settings-overlay');
 const btnSettingsClose = $('btn-settings-close');
 const btnStealthLaunch = $('btn-stealth-launch');
 const btnForceReload = $('btn-force-reload');
+const btnHistory       = $('btn-history');
+const historyPage      = $('history-page');
+const btnHistoryBack   = $('btn-history-back');
+const hpSearch         = $('hp-search');
+const hpList           = $('hp-list');
+const hpClearAll       = $('hp-clear-all');
+const btnOpenHistory   = $('btn-open-history');
 
 const conn = new BareMux.BareMuxConnection('/baremux/worker.js');
 const PUBLIC_WISP_SERVERS = [
@@ -81,8 +88,16 @@ const DEFAULT_SETTINGS = {
   erudaEnabled: false,
   engine: 'scramjet',
   tabPosition: 'top',
-  customCursor: true,
   ntClock: true,
+  restoreTabs: true,
+  historyEnabled: true,
+  widgetQuickLinks: true,
+  widgetNotes: false,
+  widgetWeather: false,
+  widgetDate: false,
+  widgetTodo: false,
+  widgetPomodoro: false,
+  wallpaperType: 'none',
   accent: '',
 };
 
@@ -98,6 +113,18 @@ function saveSettings() {
 }
 
 let settings = loadSettings();
+
+// Local-only persistence keys (kept out of bardo-settings so a large wallpaper
+// or growing history never bloats the settings blob).
+const SESSION_KEY   = 'bardo-session';
+const HISTORY_KEY   = 'bardo-history';
+const NOTES_KEY     = 'bardo-notes';
+const TODOS_KEY     = 'bardo-todos';
+const WALLPAPER_KEY = 'bardo-wallpaper';
+const WEATHER_KEY   = 'bardo-weather';
+const HISTORY_MAX   = 200;
+
+let restoring = false;      // guards saveSession() while a restore is in flight
 
 // ── Tab management ────────────────────────────────────────────────
 let tabs = [];
@@ -122,20 +149,26 @@ function createTabIframe() {
   return iframe;
 }
 
-function openTab(url = null) {
-  const id = nextTabId++;
-  const iframe = createTabIframe();
-  const tab = { id, title: 'New Tab', url: '', favicon: null, loading: false, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null };
-  tabs.push(tab);
-
-  // When a proxied page finishes loading, finish the progress bar and pull the
-  // real document title + favicon so the tab strip reads like a real browser.
-  iframe.addEventListener('load', () => {
+// When a proxied page finishes loading, finish the progress bar, pull the real
+// document title + favicon so the tab strip reads like a real browser, then
+// record the visit and persist the session.
+function bindTabLoad(tab) {
+  tab.iframe.addEventListener('load', () => {
     if (!tab.url) return;
     tab.loading = false;
     if (tab.id === activeTabId) finishProgress();
     refreshTabMeta(tab);
+    addHistory(tab.url, tab.title);
+    saveSession();
   });
+}
+
+function openTab(url = null) {
+  const id = nextTabId++;
+  const iframe = createTabIframe();
+  const tab = { id, title: 'New Tab', url: '', favicon: null, loading: false, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null, suspended: false };
+  tabs.push(tab);
+  bindTabLoad(tab);
 
   activateTab(id);
   if (url) {
@@ -147,19 +180,67 @@ function openTab(url = null) {
   return tab;
 }
 
+// A restored tab from a previous session. It carries its URL + cached title and
+// favicon but does not load until activated — so reopening 10 tabs doesn't fire
+// 10 simultaneous proxy navigations on boot.
+function openSuspendedTab(meta) {
+  const id = nextTabId++;
+  const iframe = createTabIframe();
+  const tab = { id, title: meta.title || 'New Tab', url: meta.url, favicon: meta.favicon || null, loading: false, iframe, frame: null, navCount: 0, inPageNavCount: 0, homeBackUrl: null, suspended: true };
+  tabs.push(tab);
+  bindTabLoad(tab);
+  return tab;
+}
+
+// ── Session persistence ───────────────────────────────────────────
+function saveSession() {
+  if (restoring || !settings.restoreTabs) return;
+  try {
+    const open = [];
+    let active = -1;
+    for (const t of tabs) {
+      if (!t.url) continue;
+      if (t.id === activeTabId) active = open.length;
+      open.push({ url: t.url, title: t.title, favicon: t.favicon });
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ tabs: open, active }));
+  } catch (_) {}
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+}
+
+function restoreSession() {
+  let data = null;
+  if (settings.restoreTabs) {
+    try { data = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) {}
+  }
+  const saved = data && Array.isArray(data.tabs) ? data.tabs.filter(t => t && t.url) : [];
+  if (!saved.length) { openTab(); return; }
+
+  restoring = true;
+  saved.forEach(openSuspendedTab);
+  const idx = (typeof data.active === 'number' && data.active >= 0 && data.active < tabs.length) ? data.active : 0;
+  restoring = false;
+  activateTab(tabs[idx].id);
+  saveSession();
+}
+
 function closeTab(id) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx === -1) return;
   tabs[idx].iframe.remove();
   tabs.splice(idx, 1);
 
-  if (tabs.length === 0) { openTab(); return; }
+  if (tabs.length === 0) { clearSession(); openTab(); return; }
 
   if (activeTabId === id) {
     activateTab(tabs[Math.min(idx, tabs.length - 1)].id);
   } else {
     renderTabs();
   }
+  saveSession();
 }
 
 function activateTab(id) {
@@ -169,6 +250,15 @@ function activateTab(id) {
   activeTabId = id;
   const tab = tabs.find(t => t.id === id);
   if (!tab) { renderTabs(); return; }
+
+  // A restored tab loads lazily the first time it's focused.
+  if (tab.suspended) {
+    tab.suspended = false;
+    navigate(tab.url);
+    renderTabs();
+    saveSession();
+    return;
+  }
 
   if (tab.url) {
     tab.iframe.hidden = false;
@@ -256,6 +346,7 @@ function renderTabs() {
       const [moved] = tabs.splice(srcIdx, 1);
       tabs.splice(dstIdx, 0, moved);
       renderTabs();
+      saveSession();
     });
 
     el.appendChild(fav);
@@ -327,9 +418,11 @@ function navigate(url) {
   if (!ctrl) {
     pendingUrl = url;
     setStatus('Loading, will navigate when ready…');
-    // Still update UI so user sees something is happening
+    // Surface the new-tab page so the loading status is visible (it lives inside
+    // #new-tab) instead of staring at a blank frame while the engine boots.
     const tab = getActiveTab();
-    if (tab) { urlBar.value = url; }
+    if (tab) { urlBar.value = url; tab.iframe.hidden = true; }
+    newTab.hidden = false;
     return;
   }
 
@@ -344,8 +437,10 @@ function navigate(url) {
       tab.url = e.url;
       if (tab.id === activeTabId) urlBar.value = e.url;
       applyUrlMeta(tab, e.url);
+      addHistory(e.url, tab.title);
       updateNavButtons(tab);
       renderTabs();
+      saveSession();
     });
   }
 
@@ -358,11 +453,13 @@ function navigate(url) {
   tab.frame.go(url);
   urlBar.value = url;
   applyUrlMeta(tab, url);
+  addHistory(url, tab.title);
 
   newTab.hidden = true;
   tab.iframe.hidden = false;
   updateNavButtons(tab);
   renderTabs();
+  saveSession();
 }
 
 // ── Chrome controls ───────────────────────────────────────────────
@@ -389,6 +486,7 @@ btnBack.addEventListener('click', () => {
     searchInput.value = '';
     updateNavButtons(tab);
     renderTabs();
+    saveSession();
     setTimeout(() => searchInput.focus(), 50);
   }
 });
@@ -423,6 +521,7 @@ btnHome.addEventListener('click', () => {
   searchInput.value = '';
   updateNavButtons(tab);
   renderTabs();
+  saveSession();
   setTimeout(() => searchInput.focus(), 50);
 });
 
@@ -519,7 +618,8 @@ function firstReachable(urls) {
 
 async function setupTransport() {
   setStatus('Setting up transport…');
-  const localWisp = `wss://${location.host}/wisp/`;
+  const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const localWisp = `${wsProto}://${location.host}/wisp/`;
 
   // Probe local and all public servers in parallel. Prefer local when it
   // succeeds, otherwise use whichever public server responds first.
@@ -815,9 +915,24 @@ function syncSettingsPanel() {
   $('input-panic-url').value = settings.panicUrl;
 
   // Toggles
-  $('toggle-eruda').checked = settings.erudaEnabled;
-  $('toggle-cursor').checked = settings.customCursor;
-  $('toggle-clock').checked  = settings.ntClock;
+  $('toggle-eruda').checked    = settings.erudaEnabled;
+  $('toggle-clock').checked    = settings.ntClock;
+  $('toggle-restore').checked  = settings.restoreTabs;
+  $('toggle-history').checked  = settings.historyEnabled;
+  $('toggle-quicklinks').checked      = settings.widgetQuickLinks;
+  $('toggle-widget-notes').checked    = settings.widgetNotes;
+  $('toggle-widget-weather').checked  = settings.widgetWeather;
+  $('toggle-widget-date').checked     = settings.widgetDate;
+  $('toggle-widget-todo').checked     = settings.widgetTodo;
+  $('toggle-widget-pomodoro').checked = settings.widgetPomodoro;
+
+  // Background buttons
+  document.querySelectorAll('.bg-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.bg === (settings.wallpaperType || 'none'));
+  });
+  let hasImg = false;
+  try { hasImg = !!localStorage.getItem(WALLPAPER_KEY); } catch (_) {}
+  $('btn-wallpaper-remove').style.display = hasImg ? '' : 'none';
 
   // Tab position buttons
   document.querySelectorAll('.tab-pos-btn').forEach(btn => {
@@ -940,16 +1055,113 @@ $('toggle-eruda').addEventListener('change', e => {
   applyErudaSettings();
 });
 
-$('toggle-cursor').addEventListener('change', e => {
-  settings.customCursor = e.target.checked;
-  saveSettings();
-  applyCustomCursor();
-});
-
 $('toggle-clock').addEventListener('change', e => {
   settings.ntClock = e.target.checked;
   saveSettings();
   applyClock();
+});
+
+$('toggle-restore').addEventListener('change', e => {
+  settings.restoreTabs = e.target.checked;
+  saveSettings();
+  if (settings.restoreTabs) saveSession(); else clearSession();
+});
+
+$('toggle-history').addEventListener('change', e => {
+  settings.historyEnabled = e.target.checked;
+  saveSettings();
+});
+
+btnOpenHistory.addEventListener('click', () => {
+  closeSettings();
+  openHistoryPage();
+});
+
+$('toggle-quicklinks').addEventListener('change', e => {
+  settings.widgetQuickLinks = e.target.checked;
+  saveSettings();
+  renderQuickLinks();
+});
+[
+  ['toggle-widget-notes',    'widgetNotes'],
+  ['toggle-widget-weather',  'widgetWeather'],
+  ['toggle-widget-date',     'widgetDate'],
+  ['toggle-widget-todo',     'widgetTodo'],
+  ['toggle-widget-pomodoro', 'widgetPomodoro'],
+].forEach(([id, key]) => {
+  $(id).addEventListener('change', e => {
+    settings[key] = e.target.checked;
+    saveSettings();
+    applyWidgets();
+  });
+});
+
+// Background / wallpaper controls
+document.querySelectorAll('.bg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.wallpaperType = btn.dataset.bg;
+    saveSettings();
+    applyWallpaper();
+    syncSettingsPanel();
+  });
+});
+// Photos are far too large to drop into localStorage raw (~5MB cap). Downscale
+// to a sane max dimension and step the JPEG quality down until it fits, so any
+// image the user picks ends up as a compact, locally-stored data URL.
+function compressWallpaper(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxDim = 2560;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      let quality = 0.85;
+      let data = canvas.toDataURL('image/jpeg', quality);
+      while (data.length > 2_500_000 && quality > 0.4) {
+        quality -= 0.15;
+        data = canvas.toDataURL('image/jpeg', quality);
+      }
+      if (data.length > 2_500_000) reject(new Error('too large'));
+      else resolve(data);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+    img.src = url;
+  });
+}
+
+$('wallpaper-file').addEventListener('change', async e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const removeBtn = $('btn-wallpaper-remove');
+  const prevLabel = removeBtn.textContent;
+  try {
+    const data = await compressWallpaper(file);
+    localStorage.setItem(WALLPAPER_KEY, data);
+    settings.wallpaperType = 'image';
+    saveSettings();
+    applyWallpaper();
+    syncSettingsPanel();
+  } catch (_) {
+    // Surface the failure right where the user clicked (the new-tab status line
+    // sits behind the settings overlay).
+    removeBtn.style.display = '';
+    removeBtn.textContent = '⚠ Could not use that image';
+    setTimeout(() => { removeBtn.textContent = prevLabel; syncSettingsPanel(); }, 2200);
+  }
+});
+$('btn-wallpaper-remove').addEventListener('click', () => {
+  try { localStorage.removeItem(WALLPAPER_KEY); } catch (_) {}
+  if (settings.wallpaperType === 'image') { settings.wallpaperType = 'none'; saveSettings(); }
+  applyWallpaper();
+  syncSettingsPanel();
 });
 
 let erudaOpen = false;
@@ -1012,60 +1224,6 @@ function applyTabPosition() {
   }
 }
 
-// ── Custom cursor ─────────────────────────────────────────────────
-const cursorDot  = $('cursor-dot');
-const cursorRing = $('cursor-ring');
-let curMouseX = 0, curMouseY = 0, curRingX = 0, curRingY = 0;
-let cursorRAF = null, cursorShown = false;
-
-const CURSOR_INTERACTIVE =
-  'button, a, input, select, textarea, label, .tab, .bookmark-item, ' +
-  '.waffle-item, .ql-item, .theme-btn, .cloak-btn, .engine-btn, .tab-pos-btn, .sm-tab, .toggle-wrap';
-
-function showCursor() {
-  if (cursorShown) return;
-  cursorShown = true;
-  cursorDot.style.opacity = '1';
-  cursorRing.style.opacity = '1';
-}
-function hideCursor() {
-  if (!cursorShown) return;
-  cursorShown = false;
-  cursorDot.style.opacity = '0';
-  cursorRing.style.opacity = '0';
-}
-function cursorLoop() {
-  curRingX += (curMouseX - curRingX) * 0.2;
-  curRingY += (curMouseY - curRingY) * 0.2;
-  cursorRing.style.transform = `translate(${curRingX}px, ${curRingY}px)`;
-  cursorRAF = requestAnimationFrame(cursorLoop);
-}
-document.addEventListener('mousemove', e => {
-  if (!settings.customCursor) return;
-  curMouseX = e.clientX; curMouseY = e.clientY;
-  cursorDot.style.transform = `translate(${curMouseX}px, ${curMouseY}px)`;
-  showCursor();
-  cursorRing.classList.toggle('hover', !!e.target.closest?.(CURSOR_INTERACTIVE));
-}, { passive: true });
-document.addEventListener('mousedown', () => cursorRing.classList.add('down'));
-document.addEventListener('mouseup',   () => cursorRing.classList.remove('down'));
-// The pointer entering a proxied iframe stops firing parent mousemoves, so hide
-// the overlay there and let the page's own native cursor take over.
-document.addEventListener('mouseover', e => { if (e.target.tagName === 'IFRAME') hideCursor(); });
-document.addEventListener('mouseleave', hideCursor);
-window.addEventListener('blur', hideCursor);
-
-function applyCustomCursor() {
-  if (settings.customCursor) {
-    document.documentElement.classList.add('custom-cursor');
-    if (!cursorRAF) cursorLoop();
-  } else {
-    document.documentElement.classList.remove('custom-cursor');
-    hideCursor();
-    if (cursorRAF) { cancelAnimationFrame(cursorRAF); cursorRAF = null; }
-  }
-}
-
 // ── New-tab clock ─────────────────────────────────────────────────
 let clockTimer = null;
 function tickClock() {
@@ -1093,6 +1251,393 @@ function applyClock() {
   }
 }
 
+// ── Browsing history (local-only) ─────────────────────────────────
+let history = loadHistory();
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (_) { return []; }
+}
+function saveHistory() {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (_) {}
+}
+function addHistory(url, title) {
+  if (!settings.historyEnabled) return;
+  if (!url || !/^https?:/i.test(url)) return;
+  // Collapse consecutive hits on the same URL into one entry (refresh the time
+  // and pick up a better title once the page reports it).
+  if (history[0] && history[0].url === url) {
+    history[0].ts = Date.now();
+    if (title) history[0].title = title;
+    saveHistory();
+    if (historyPage.classList.contains('open')) renderHistoryPage();
+    return;
+  }
+  history.unshift({ url, title: title || '', ts: Date.now() });
+  if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+  saveHistory();
+  if (historyPage.classList.contains('open')) renderHistoryPage();
+}
+function clearHistory() {
+  history = [];
+  saveHistory();
+  renderHistoryPage();
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return url; }
+}
+
+// Groups history rows the way Chrome's history page does: Today, Yesterday,
+// then a full weekday/date for anything older.
+function dateGroupLabel(ts) {
+  const startOfToday = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  if (ts >= startOfToday) return 'Today';
+  if (ts >= startOfToday - 86400000) return 'Yesterday';
+  return new Date(ts).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function openHistoryPage() {
+  historyPage.classList.add('open');
+  renderHistoryPage();
+  setTimeout(() => hpSearch.focus(), 50);
+}
+function closeHistoryPage() {
+  historyPage.classList.remove('open');
+}
+
+function renderHistoryPage() {
+  const q = (hpSearch?.value || '').trim().toLowerCase();
+  hpList.innerHTML = '';
+
+  const items = history.filter(h =>
+    !q || (h.title || '').toLowerCase().includes(q) || h.url.toLowerCase().includes(q));
+
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'hp-empty';
+    empty.textContent = q ? 'No matching history' : 'No browsing history yet';
+    hpList.appendChild(empty);
+    return;
+  }
+
+  let lastGroup = null;
+  for (const h of items) {
+    const group = dateGroupLabel(h.ts);
+    if (group !== lastGroup) {
+      lastGroup = group;
+      const head = document.createElement('div');
+      head.className = 'hp-group-label';
+      head.textContent = group;
+      hpList.appendChild(head);
+    }
+
+    const row = document.createElement('button');
+    row.className = 'hp-item';
+    row.title = h.url;
+
+    const time = document.createElement('span');
+    time.className = 'hp-time';
+    time.textContent = new Date(h.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    const fav = document.createElement('img');
+    fav.className = 'hp-fav';
+    fav.alt = '';
+    try { fav.src = gFav(new URL(h.url).hostname); } catch (_) {}
+    fav.onerror = () => { fav.style.visibility = 'hidden'; };
+
+    const main = document.createElement('span');
+    main.className = 'hp-main';
+    const t = document.createElement('span');
+    t.className = 'hp-title';
+    t.textContent = h.title || hostOf(h.url);
+    const u = document.createElement('span');
+    u.className = 'hp-url';
+    u.textContent = hostOf(h.url);
+    main.appendChild(t);
+    main.appendChild(u);
+
+    const del = document.createElement('span');
+    del.className = 'hp-del';
+    del.title = 'Remove from history';
+    del.textContent = '×';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      history = history.filter(x => x !== h);
+      saveHistory();
+      renderHistoryPage();
+    });
+
+    row.appendChild(time);
+    row.appendChild(fav);
+    row.appendChild(main);
+    row.appendChild(del);
+    row.addEventListener('click', () => { closeHistoryPage(); openTab(h.url); });
+    hpList.appendChild(row);
+  }
+}
+
+btnHistory.addEventListener('click', openHistoryPage);
+btnHistoryBack.addEventListener('click', closeHistoryPage);
+hpSearch.addEventListener('input', renderHistoryPage);
+hpClearAll.addEventListener('click', clearHistory);
+
+// ── New-tab widgets ───────────────────────────────────────────────
+const WMO = code => {
+  if (code === 0) return { icon: '☀️', text: 'Clear' };
+  if (code <= 2)  return { icon: '🌤️', text: 'Partly cloudy' };
+  if (code === 3) return { icon: '☁️', text: 'Overcast' };
+  if (code <= 48) return { icon: '🌫️', text: 'Fog' };
+  if (code <= 57) return { icon: '🌦️', text: 'Drizzle' };
+  if (code <= 67) return { icon: '🌧️', text: 'Rain' };
+  if (code <= 77) return { icon: '🌨️', text: 'Snow' };
+  if (code <= 82) return { icon: '🌧️', text: 'Showers' };
+  if (code <= 86) return { icon: '🌨️', text: 'Snow showers' };
+  if (code <= 99) return { icon: '⛈️', text: 'Thunderstorm' };
+  return { icon: '🌡️', text: '' };
+};
+
+function buildDateWidget() {
+  const card = document.createElement('div');
+  card.className = 'widget-card widget-date';
+  const head = document.createElement('div');
+  head.className = 'widget-head';
+  head.textContent = 'Today';
+  const day = document.createElement('div');
+  day.className = 'date-day';
+  const full = document.createElement('div');
+  full.className = 'date-full';
+  const now = new Date();
+  day.textContent  = now.toLocaleDateString([], { weekday: 'long' });
+  full.textContent = now.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  card.appendChild(head);
+  card.appendChild(day);
+  card.appendChild(full);
+  return card;
+}
+
+function loadTodos() {
+  try { return JSON.parse(localStorage.getItem(TODOS_KEY) || '[]'); } catch (_) { return []; }
+}
+function saveTodos(t) {
+  try { localStorage.setItem(TODOS_KEY, JSON.stringify(t)); } catch (_) {}
+}
+function buildTodoWidget() {
+  const card = document.createElement('div');
+  card.className = 'widget-card widget-todo';
+  const head = document.createElement('div');
+  head.className = 'widget-head';
+  head.textContent = 'To-do';
+  const list = document.createElement('div');
+  list.className = 'todo-list';
+  const form = document.createElement('form');
+  form.className = 'todo-form';
+  const input = document.createElement('input');
+  input.className = 'todo-input';
+  input.placeholder = 'Add a task…';
+  input.spellcheck = false;
+  form.appendChild(input);
+
+  let todos = loadTodos();
+  function render() {
+    list.innerHTML = '';
+    todos.forEach((item, i) => {
+      const row = document.createElement('label');
+      row.className = 'todo-item' + (item.done ? ' done' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = item.done;
+      cb.addEventListener('change', () => { todos[i].done = cb.checked; saveTodos(todos); render(); });
+      const text = document.createElement('span');
+      text.className = 'todo-text';
+      text.textContent = item.text;
+      const del = document.createElement('span');
+      del.className = 'todo-del';
+      del.textContent = '×';
+      del.title = 'Remove';
+      del.addEventListener('click', e => { e.preventDefault(); todos.splice(i, 1); saveTodos(todos); render(); });
+      row.appendChild(cb);
+      row.appendChild(text);
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v) return;
+    todos.push({ text: v, done: false });
+    saveTodos(todos);
+    input.value = '';
+    render();
+  });
+  render();
+  card.appendChild(head);
+  card.appendChild(list);
+  card.appendChild(form);
+  return card;
+}
+
+// Focus timer (Pomodoro-style). State lives at module scope so it keeps running
+// while you browse other tabs; applyWidgets() clears the interval before a
+// rebuild so a re-render never leaves an orphaned ticker behind.
+const POMO_DEFAULT = 25 * 60;
+let pomoInterval = null, pomoRemaining = POMO_DEFAULT, pomoRunning = false;
+function fmtClock(s) {
+  const m = Math.floor(s / 60);
+  return m + ':' + String(s % 60).padStart(2, '0');
+}
+function stopPomodoro() {
+  if (pomoInterval) { clearInterval(pomoInterval); pomoInterval = null; }
+  pomoRunning = false;
+}
+function buildPomodoroWidget() {
+  const card = document.createElement('div');
+  card.className = 'widget-card widget-pomo';
+  card.innerHTML = '<div class="widget-head">Focus timer</div>';
+  const time = document.createElement('div');
+  time.className = 'pomo-time';
+  time.textContent = fmtClock(pomoRemaining);
+  const ctrls = document.createElement('div');
+  ctrls.className = 'pomo-ctrls';
+  const startBtn = document.createElement('button');
+  startBtn.className = 'pomo-btn';
+  startBtn.textContent = pomoRunning ? 'Pause' : 'Start';
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'pomo-btn';
+  resetBtn.textContent = 'Reset';
+
+  function tick() {
+    pomoRemaining = Math.max(0, pomoRemaining - 1);
+    time.textContent = fmtClock(pomoRemaining);
+    if (pomoRemaining <= 0) { stopPomodoro(); startBtn.textContent = 'Start'; }
+  }
+  startBtn.addEventListener('click', () => {
+    if (pomoRunning) { stopPomodoro(); startBtn.textContent = 'Start'; }
+    else {
+      if (pomoRemaining <= 0) pomoRemaining = POMO_DEFAULT;
+      pomoRunning = true;
+      startBtn.textContent = 'Pause';
+      pomoInterval = setInterval(tick, 1000);
+    }
+  });
+  resetBtn.addEventListener('click', () => {
+    stopPomodoro();
+    pomoRemaining = POMO_DEFAULT;
+    time.textContent = fmtClock(pomoRemaining);
+    startBtn.textContent = 'Start';
+  });
+  ctrls.appendChild(startBtn);
+  ctrls.appendChild(resetBtn);
+  card.appendChild(time);
+  card.appendChild(ctrls);
+  return card;
+}
+
+function buildNotesWidget() {
+  const card = document.createElement('div');
+  card.className = 'widget-card';
+  const head = document.createElement('div');
+  head.className = 'widget-head';
+  head.textContent = 'Notes';
+  const ta = document.createElement('textarea');
+  ta.className = 'widget-notes';
+  ta.placeholder = 'Jot something down…';
+  ta.spellcheck = false;
+  try { ta.value = localStorage.getItem(NOTES_KEY) || ''; } catch (_) {}
+  ta.addEventListener('input', () => {
+    try { localStorage.setItem(NOTES_KEY, ta.value); } catch (_) {}
+  });
+  card.appendChild(head);
+  card.appendChild(ta);
+  return card;
+}
+
+function buildWeatherWidget() {
+  const card = document.createElement('div');
+  card.className = 'widget-card';
+  card.id = 'widget-weather';
+  card.innerHTML =
+    `<div class="widget-head">Weather</div>` +
+    `<div class="weather-body"><span class="weather-loading">Loading…</span></div>`;
+  return card;
+}
+
+function renderWeather(body, d) {
+  const w = WMO(d.code);
+  body.innerHTML =
+    `<span class="weather-icon">${w.icon}</span>` +
+    `<span class="weather-temp">${d.temp}°</span>` +
+    `<span class="weather-meta">${w.text}${d.place ? ' · ' + d.place : ''}</span>`;
+}
+
+// Best-effort weather with no API key: IP geolocation (ipapi.co) → Open-Meteo,
+// cached for an hour. Both endpoints are CORS-enabled and need no permission
+// prompt, keeping the new-tab page quiet and stealthy.
+async function loadWeather() {
+  const body = document.querySelector('#widget-weather .weather-body');
+  if (!body) return;
+  try {
+    const cached = JSON.parse(localStorage.getItem(WEATHER_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < 3600e3) { renderWeather(body, cached.data); return; }
+
+    let lat, lon, place = '';
+    try {
+      const r = await fetch('https://ipapi.co/json/');
+      if (r.ok) { const j = await r.json(); lat = j.latitude; lon = j.longitude; place = j.city || ''; }
+    } catch (_) {}
+    if (lat == null || lon == null) { body.innerHTML = '<span class="weather-loading">Location unavailable</span>'; return; }
+
+    const wr = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit`);
+    const wj = await wr.json();
+    const c = wj.current || {};
+    const data = { temp: Math.round(c.temperature_2m), code: c.weather_code, place };
+    try { localStorage.setItem(WEATHER_KEY, JSON.stringify({ ts: Date.now(), data })); } catch (_) {}
+    renderWeather(body, data);
+  } catch (_) {
+    body.innerHTML = '<span class="weather-loading">Weather unavailable</span>';
+  }
+}
+
+function applyWidgets() {
+  const left  = $('nt-widgets-left');
+  const right = $('nt-widgets-right');
+  if (!left || !right) return;
+  stopPomodoro();           // tear down any running ticker before rebuilding
+  left.innerHTML = '';
+  right.innerHTML = '';
+  // Split across the two bottom corners so a full set spreads out instead of
+  // stacking into one tall column. Left = compact glanceable cards, right =
+  // the taller interactive ones.
+  if (settings.widgetDate)     left.appendChild(buildDateWidget());
+  if (settings.widgetWeather)  { left.appendChild(buildWeatherWidget()); loadWeather(); }
+  if (settings.widgetPomodoro) left.appendChild(buildPomodoroWidget());
+  if (settings.widgetTodo)     right.appendChild(buildTodoWidget());
+  if (settings.widgetNotes)    right.appendChild(buildNotesWidget());
+}
+
+// ── New-tab wallpaper ─────────────────────────────────────────────
+function applyWallpaper() {
+  const nt = $('new-tab');
+  if (!nt) return;
+  const type = settings.wallpaperType || 'none';
+  if (type === 'gradient') {
+    nt.style.background =
+      'radial-gradient(circle at 25% 12%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 55%),' +
+      'radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 55%),' +
+      'var(--bg)';
+  } else if (type === 'image') {
+    let img = null;
+    try { img = localStorage.getItem(WALLPAPER_KEY); } catch (_) {}
+    // Scrim over the photo keeps the wordmark and search box readable.
+    nt.style.background = img
+      ? 'linear-gradient(color-mix(in srgb, var(--bg) 45%, transparent), color-mix(in srgb, var(--bg) 62%, transparent)),' +
+        `url("${img}") center/cover no-repeat`
+      : '';
+  } else {
+    nt.style.background = '';
+  }
+}
+
 function applyAllSettings() {
   applyTheme();
   applyAccent();
@@ -1100,8 +1645,9 @@ function applyAllSettings() {
   applyBookmarksBar();
   applyErudaSettings();
   applyTabPosition();
-  applyCustomCursor();
   applyClock();
+  applyWallpaper();
+  applyWidgets();
   renderBookmarks();
 }
 
@@ -1144,6 +1690,15 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   if (!settings.panicKey || e.key !== settings.panicKey) return;
   if (settingsOverlay.classList.contains('open')) { closeSettings(); return; }
+  // Leave no trail behind: drop the restored session, browsing history and notes
+  // before bailing out to the cover page.
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(NOTES_KEY);
+    localStorage.removeItem(TODOS_KEY);
+  } catch (_) {}
+  history = [];
   const url = settings.panicUrl || 'https://classroom.google.com';
   window.location.replace(url);
 });
@@ -1157,6 +1712,12 @@ function focusAddress() {
 
 document.addEventListener('keydown', e => {
   const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
+  if (e.key === 'Escape' && historyPage.classList.contains('open')) {
+    e.preventDefault();
+    closeHistoryPage();
+    return;
+  }
 
   // Alt+Arrow → history; Alt+1..9 → jump to tab N (chosen over Ctrl to dodge
   // shortcuts the host browser reserves for its own tabs).
@@ -1174,6 +1735,7 @@ document.addEventListener('keydown', e => {
   switch (e.key.toLowerCase()) {
     case 'l': e.preventDefault(); focusAddress(); break;
     case 't': e.preventDefault(); openTab(); break;
+    case 'h': e.preventDefault(); openHistoryPage(); break;
     case 'w':
       if (activeTabId !== null) { e.preventDefault(); closeTab(activeTabId); }
       break;
@@ -1254,6 +1816,7 @@ function renderQuickLinks() {
   const host = $('nt-quicklinks');
   if (!host) return;
   host.innerHTML = '';
+  if (!settings.widgetQuickLinks) return;
   for (const sc of waffleShortcuts.slice(0, 6)) {
     const chip = document.createElement('button');
     chip.className = 'ql-item';
@@ -1349,6 +1912,6 @@ navigator.serviceWorker?.addEventListener('controllerchange', () => {
 
 applyAllSettings();
 handleAboutBlankResult();
-openTab();
+restoreSession();
 initEngine();
 loadShortcuts();
