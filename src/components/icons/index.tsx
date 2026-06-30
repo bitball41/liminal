@@ -7,8 +7,6 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 
-// Animated Lucide icons (lucide-animated.com). Each is a motion-powered
-// forwardRef component exposing a { startAnimation, stopAnimation } handle.
 import { ClockIcon } from "@/components/ui/animated/clock";
 import { HistoryIcon } from "@/components/ui/animated/history";
 import { AttachFileIcon } from "@/components/ui/animated/attach-file";
@@ -60,7 +58,6 @@ type AnimatedIcon = ForwardRefExoticComponent<
   { size?: number; className?: string } & RefAttributes<AnimatedIconHandle>
 >;
 
-// Keys preserved as literals so IconName stays a precise union for callers.
 const COMPONENTS = {
   clock: ClockIcon,
   history: HistoryIcon,
@@ -113,19 +110,12 @@ const REGISTRY = COMPONENTS as unknown as Record<IconName, AnimatedIcon>;
 interface IconProps {
   name: IconName;
   size?: number;
-  /** "loader" spins continuously; "none" renders the glyph without animation. */
   anim?: IconAnim;
   className?: string;
   style?: CSSProperties;
   "aria-label"?: string;
 }
 
-/**
- * Renders an animated Lucide glyph and drives its animation from the nearest
- * interactive ancestor (a button or widget card) so hovering/focusing the
- * control animates the icon — matching the old CSS-hover behaviour, but now
- * with the real per-icon motion. `anim="loader"` runs a continuous spin.
- */
 export function Icon({ name, anim, size = 16, className, style, ...rest }: IconProps) {
   const Glyph = REGISTRY[name];
   const handle = useRef<AnimatedIconHandle>(null);
@@ -145,8 +135,6 @@ export function Icon({ name, anim, size = 16, className, style, ...rest }: IconP
       return;
     }
 
-    // Animate when the surrounding control is hovered or focused. Falls back to
-    // the icon's own box when it isn't nested in a button/card.
     const trigger = host.current?.closest("button, .widget-card, .ai-trigger") ?? host.current;
     if (!trigger) return;
     const start = () => h.startAnimation();

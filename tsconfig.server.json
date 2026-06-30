@@ -12,5 +12,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["server.ts", "types/**/*.d.ts"]
+  "include": ["server.ts", "server/**/*.ts", "types/**/*.d.ts"]
 }

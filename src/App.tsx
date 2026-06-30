@@ -30,12 +30,10 @@ export default function App() {
   const [fsHover, setFsHover] = useState(false);
   const fsRef = useRef<HTMLDivElement>(null);
 
-  // Boot the proxy engine + session once on mount.
   useEffect(() => {
     core.boot();
   }, []);
 
-  // ── Settings → DOM ───────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", s.theme || "dark");
   }, [s.theme]);
@@ -73,7 +71,6 @@ export default function App() {
     else document.documentElement.removeAttribute("data-fullscreen");
   }, [fullscreen]);
 
-  // Wallpaper backdrop for the new-tab page.
   useEffect(() => {
     const root = document.documentElement;
     if (s.wallpaperType === "gradient") {
@@ -88,7 +85,6 @@ export default function App() {
       try {
         img = localStorage.getItem(WALLPAPER_KEY);
       } catch {
-        /* ignore */
       }
       root.style.setProperty(
         "--nt-bg",
@@ -102,12 +98,9 @@ export default function App() {
     }
   }, [s.wallpaperType]);
 
-  // ── Focus management for modals ──────────────────────────────────
   useEffect(() => {
     if (settingsOpen || historyOpen) {
-      const modal = document.querySelector<HTMLElement>(
-        settingsOpen ? '[role="dialog"]' : '[role="dialog"]',
-      );
+      const modal = document.querySelector<HTMLElement>('[role="dialog"]');
       const focusable = modal?.querySelector<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
@@ -115,7 +108,6 @@ export default function App() {
     }
   }, [settingsOpen, historyOpen]);
 
-  // ── Fullscreen hover exit ────────────────────────────────────────
   useEffect(() => {
     if (!fullscreen) return;
     const el = fsRef.current;
@@ -130,13 +122,11 @@ export default function App() {
     };
   }, [fullscreen]);
 
-  // ── Keyboard shortcuts + panic key ───────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
 
-      // Panic key
       if (s.panicKey && e.key === s.panicKey && !typing) {
         if (settingsOpen) {
           setSettingsOpen(false);
@@ -223,7 +213,6 @@ export default function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, [s.panicKey, settingsOpen, historyOpen, fullscreen, tabSwitcherOpen]);
 
-  // about:blank launcher succeeded — this tab is now just a launcher shell.
   if (abLaunched) {
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#000", color: "#fff", fontFamily: "system-ui, sans-serif", gap: 10 }}>

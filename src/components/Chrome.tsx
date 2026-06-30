@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { GooeyInput } from "@/components/ui/gooey-input";
 import { WaffleMenu } from "@/components/WaffleMenu";
+import { toast } from "@/lib/toast";
 import { core, shallowEqual, useBardoSelector } from "@/lib/useCore";
 
 interface ChromeProps {
@@ -25,7 +26,6 @@ export function Chrome({ onSettings, onHistory, fullscreen, onToggleFullscreen }
   const [value, setValue] = useState(activeUrl);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
 
-  // Keep the address bar in sync with the active tab unless the user is editing.
   useEffect(() => {
     setValue(activeUrl);
   }, [activeUrl]);
@@ -172,25 +172,18 @@ async function copyText(value: string) {
 }
 
 let erudaOpen = false;
-function openEruda() {
-  const w = window as any;
-  if (!w.eruda) {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/eruda";
-    s.onload = () => {
-      w.eruda.init();
-      w.eruda.show();
-      erudaOpen = true;
-    };
-    s.onerror = () => {
-      import("@/lib/toast").then(({ toast }) => toast.error("DevTools CDN failed to load."));
-    };
-    document.body.appendChild(s);
-  } else if (erudaOpen) {
-    w.eruda.hide();
-    erudaOpen = false;
-  } else {
-    w.eruda.show();
-    erudaOpen = true;
+async function openEruda() {
+  try {
+    const eruda = (await import("eruda")).default;
+    if (!window.eruda) {
+      eruda.init();
+      window.eruda = eruda;
+    }
+
+    if (erudaOpen) eruda.hide();
+    else eruda.show();
+    erudaOpen = !erudaOpen;
+  } catch {
+    toast.error("Developer tools failed to load.");
   }
 }

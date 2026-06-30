@@ -18,10 +18,13 @@
     "@mercuryworkshop/scramjet": "^1.1.0",
     "@mercuryworkshop/wisp-js": "^0.4.1",
     "compression": "^1.8.1",
+    "eruda": "3.4.3",
     "express": "^4.19.2",
+    "jsdom": "^29.1.1",
     "motion": "^12.42.0",
     "preact": "^10.27.2",
     "scramjet-v2": "npm:@mercuryworkshop/scramjet@^2.0.2-alpha",
+    "tough-cookie": "^6.0.1",
     "tsx": "^4.21.0"
   },
   "devDependencies": {
@@ -29,6 +32,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.0",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

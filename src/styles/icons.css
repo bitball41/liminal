@@ -1,6 +1,3 @@
-/* Animated Lucide glyphs (lucide-animated.com). Motion drives every animation
-   imperatively via the Icon wrapper, so this file only handles layout. The icon
-   sits in an inline-flex host span wrapping the component's own <div><svg>. */
 .ai {
   display: inline-flex;
   align-items: center;

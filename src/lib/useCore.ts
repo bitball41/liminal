@@ -3,8 +3,6 @@ import { core, type Snapshot } from "./core";
 
 type EqualityFn<T> = (previous: T, next: T) => boolean;
 
-/** Subscribe to only the state a component renders, keeping unrelated proxy
- * status updates from cascading through the whole interface. */
 export function useBardoSelector<T>(
   selector: (snapshot: Snapshot) => T,
   isEqual: EqualityFn<T> = Object.is,

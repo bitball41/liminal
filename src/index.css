@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Tailwind utilities use Bardo's existing runtime theme variables. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="slate"], [data-theme="graphite"], [data-theme="macchiato"], [data-theme="mocha"], [data-theme="space"], [data-theme="midnight"], [data-theme="aurora"], [data-theme="forest"], [data-theme="crimson"], [data-theme="ember"], [data-theme="rose"]) *);
 
 @theme inline {

@@ -27,7 +27,6 @@ function HistoryFav({ url }: { url: string }) {
   try {
     src = gFav(new URL(url).hostname);
   } catch {
-    /* ignore */
   }
   return <img className="hp-fav" alt="" src={src} style={hidden ? { visibility: "hidden" } : undefined} onError={() => setHidden(true)} />;
 }
@@ -49,7 +48,6 @@ export function HistoryPage({ open, onClose, onOpenUrl }: HistoryPageProps) {
     );
   }, [history, q]);
 
-  // Build groups in render order.
   const rows: (HistoryEntry | { group: string })[] = [];
   let lastGroup: string | null = null;
   for (const h of items) {

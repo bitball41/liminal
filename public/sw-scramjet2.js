@@ -11,10 +11,11 @@ let _wasmLoaded = false;
 async function ensureHandler() {
   if (_handler) return _handler;
 
-  // Load WASM if not already loaded
   if (!_wasmLoaded && typeof $scramjet?.setWasm === 'function') {
     try {
-      const wasmBytes = await fetch('/scramjet2/scramjet.wasm').then(r => r.arrayBuffer());
+      const response = await fetch('/scramjet2/scramjet.wasm');
+      if (!response.ok) throw new Error(`WASM request failed: ${response.status}`);
+      const wasmBytes = await response.arrayBuffer();
       await $scramjet.setWasm(wasmBytes);
       _wasmLoaded = true;
     } catch (e) {
@@ -55,7 +56,7 @@ self.addEventListener('fetch', event => {
         return await handler.handleFetch(req);
       } catch (e) {
         console.error('[bardo sw-v2] error:', e);
-        return new Response('Scramjet v2 error: ' + e.message, { status: 500 });
+        return new Response('Scramjet v2 request failed', { status: 500 });
       }
     })()
   );

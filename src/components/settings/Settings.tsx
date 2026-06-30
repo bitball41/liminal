@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { ConfirmButton } from "@/components/ui/ConfirmButton";
-import { ACCENTS, THEME_COLUMNS, WALLPAPER_KEY } from "@/lib/constants";
+import { ACCENTS, RECOMMENDED_THEMES, THEME_COLUMNS, WALLPAPER_KEY } from "@/lib/constants";
 import { toast } from "@/lib/toast";
 import { core, useBardoSelector } from "@/lib/useCore";
 import type { EngineName, Settings as SettingsType, TabPosition, ThemeName } from "@/lib/types";
@@ -224,44 +224,50 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </div>
             </div>
 
-            {/* Themes */}
-            {pane === "themes" && (
-              <div className="theme-columns">
-                {THEME_COLUMNS.map((col) => (
-                  <div key={col.mode} className="theme-col">
-                    <div className="theme-col-head">{col.head}</div>
-                    {(["neutral", "color"] as const).map((grp) => (
+            {pane === "themes" &&
+              (() => {
+                const themeBtn = (t: (typeof RECOMMENDED_THEMES)[number]) => {
+                  const active = s.theme === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      className={cn("theme-btn theme-preview", active && "active")}
+                      style={{
+                        background: t.surface,
+                        color: t.text,
+                        borderColor: active ? t.accent : t.border,
+                        boxShadow: active ? `0 0 0 1px ${t.accent}` : undefined,
+                      }}
+                      onClick={() => core.setSetting("theme", t.id as ThemeName)}
+                    >
+                      <span className="theme-dot" style={{ background: t.accent }} />
+                      {t.label}
+                    </button>
+                  );
+                };
+                return (
+                  <div className="theme-groups">
+                    <div className="theme-section">
+                      <div className="theme-subhead">Recommended</div>
+                      <div className="theme-rec-grid">{RECOMMENDED_THEMES.map(themeBtn)}</div>
+                    </div>
+                    {(["color", "neutral"] as const).map((grp) => (
                       <div key={grp} className="theme-section">
                         <div className="theme-subhead">{grp === "neutral" ? "Neutral" : "Color"}</div>
-                        {col.themes
-                          .filter((t) => t.group === grp)
-                          .map((t) => {
-                            const active = s.theme === t.id;
-                            return (
-                              <button
-                                key={t.id}
-                                className={cn("theme-btn theme-preview", active && "active")}
-                                style={{
-                                  background: t.surface,
-                                  color: t.text,
-                                  borderColor: active ? t.accent : t.border,
-                                  boxShadow: active ? `0 0 0 1px ${t.accent}` : undefined,
-                                }}
-                                onClick={() => core.setSetting("theme", t.id as ThemeName)}
-                              >
-                                <span className="theme-dot" style={{ background: t.accent }} />
-                                {t.label}
-                              </button>
-                            );
-                          })}
+                        <div className="theme-columns">
+                          {THEME_COLUMNS.map((col) => (
+                            <div key={col.mode} className="theme-col">
+                              <div className="theme-col-head">{col.head}</div>
+                              {col.themes.filter((t) => t.group === grp).map(themeBtn)}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })()}
 
-            {/* Personalize — accent & wallpaper */}
             {pane === "appearance" && (
               <>
                 <div className="pane-label">Accent</div>
@@ -333,7 +339,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
                       try {
                         localStorage.removeItem(WALLPAPER_KEY);
                       } catch {
-                        /* ignore */
                       }
                       setHasImg(false);
                       setWallpaperErr(false);
@@ -348,7 +353,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Widgets */}
             {pane === "widgets" && (
               <>
                 <div className="pane-label">New-tab Page</div>
@@ -366,7 +370,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Privacy */}
             {pane === "privacy" && (
               <>
                 <div className="pane-label">Session</div>
@@ -379,7 +382,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* History */}
             {pane === "history" && (
               <>
                 <div className="pane-label">Browsing History</div>
@@ -396,7 +398,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Cloaker */}
             {pane === "cloaker" && (
               <>
                 <div className="pane-label">Tab Cloaker</div>
@@ -411,7 +412,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Bookmarks */}
             {pane === "bookmarks" && (
               <>
                 <div className="pane-label">Bookmarks Bar</div>
@@ -422,7 +422,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Search */}
             {pane === "search" && (
               <>
                 <div className="pane-label">Default Search Engine</div>
@@ -439,7 +438,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Panic */}
             {pane === "panic" && (
               <>
                 <div className="pane-label">Panic Key</div>
@@ -458,7 +456,7 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
                 <div className="setting-row">
                   <span className="setting-name">Redirect to</span>
                   <input
-                    type="text"
+                    type="url"
                     className="setting-input"
                     placeholder="https://classroom.google.com"
                     value={s.panicUrl}
@@ -468,7 +466,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Layout */}
             {pane === "layout" && (
               <>
                 <div className="pane-label">Tab Bar Position</div>
@@ -484,7 +481,6 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
               </>
             )}
 
-            {/* Advanced */}
             {pane === "advanced" && (
               <>
                 <div className="pane-label">Developer Tools</div>
@@ -496,6 +492,7 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
                     [
                       ["scramjet", "Scramjet v1", "Default — stable"],
                       ["scramjet2", "Scramjet v2", "Alpha — experimental"],
+                      ["klystron", "Klystron", "Server-side — beta"],
                     ] as [EngineName, string, string][]
                   ).map(([id, name, hint]) => (
                     <button key={id} className={cn("engine-btn", (s.engine || "scramjet") === id && "active")} onClick={() => core.setSetting("engine", id)}>

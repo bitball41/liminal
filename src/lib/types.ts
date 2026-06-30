@@ -1,5 +1,4 @@
 export type ThemeName =
-  // Dark
   | "dark"
   | "slate"
   | "graphite"
@@ -12,7 +11,6 @@ export type ThemeName =
   | "crimson"
   | "ember"
   | "rose"
-  // Light
   | "light"
   | "latte"
   | "cappuccino"
@@ -27,7 +25,7 @@ export type ThemeName =
   | "petal";
 
 export type TabPosition = "top" | "bottom" | "left" | "right";
-export type EngineName = "scramjet" | "scramjet2";
+export type EngineName = "scramjet" | "scramjet2" | "klystron";
 export type WallpaperType = "none" | "gradient" | "image";
 
 export interface ScramjetController {
@@ -85,7 +83,6 @@ export interface Settings {
   widgetBattery: boolean;
   wallpaperType: WallpaperType;
   accent: string;
-  /** Collapse the vertical tab rail (left/right positions only). */
   sidebarCollapsed: boolean;
 }
 
@@ -101,7 +98,6 @@ export interface Shortcut {
   icon?: string;
 }
 
-/** Public, render-safe snapshot of a tab (no iframe / proxy frame refs). */
 export interface TabView {
   id: number;
   title: string;
@@ -125,4 +121,11 @@ export interface InternalTab {
   homeBackUrl: string | null;
   suspended: boolean;
   pinned: boolean;
+}
+
+declare global {
+  interface Window {
+    __bardoAbLaunched?: boolean;
+    __bardoAbBlocked?: boolean;
+  }
 }

@@ -10,7 +10,7 @@ transport and service-worker runtime.
 - Search, bookmarks, history, tab cloaking, and panic controls
 - Configurable themes, layouts, widgets, and about:blank launch mode
 - Scramjet v1 and experimental Scramjet v2 engines
-- An under-26 kB gzip startup UI with lazy-loaded secondary tools
+- Lazy-loaded settings, history, widgets, and developer tools
 - Cached and compressed proxy runtime assets
 
 ## Requirements
@@ -37,21 +37,21 @@ forwards the proxy/runtime paths to port 8080.
 
 ```text
 .
-├── server.ts              # Express, Wisp, compression, and cache policy
-├── src/                   # Preact + TypeScript interface and proxy controller
+├── server.ts
+├── src/
 ├── public/
-│   ├── sw.js              # Browser-executable Scramjet v1 worker
-│   ├── sw-scramjet2.js    # Browser-executable Scramjet v2 worker
+│   ├── ab-launcher.js
+│   ├── sw.js
+│   ├── sw-scramjet2.js
 │   ├── shortcuts.json
-│   └── app.js             # Legacy pre-build fallback
 ├── index.html
 ├── vite.config.ts
 └── tsconfig*.json
 ```
 
-The service workers remain JavaScript deployment artifacts because browsers
-execute them directly. Application and server source is TypeScript; the legacy
-vanilla app is retained only as a fallback when `dist/` has not been built.
+The service workers and early about:blank launcher remain JavaScript deployment
+artifacts because browsers execute them directly. Application and server source
+is TypeScript. The production server fails fast when `dist/` has not been built.
 
 ## Scripts
 

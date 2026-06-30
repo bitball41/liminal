@@ -3,10 +3,6 @@ import preact from '@preact/preset-vite';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
-// The proxy/service-worker plumbing (Scramjet, bare-mux, transports, the
-// service workers, shortcuts.json, and the wisp websocket) is served by the
-// Express server in server.ts. In dev we forward those exact paths to it so the
-// Preact app on :5173 behaves as if it were served from the same origin.
 const EXPRESS = 'http://localhost:8080';
 const passthrough = [
   '/scramjet',
@@ -14,19 +10,16 @@ const passthrough = [
   '/baremux',
   '/epoxy',
   '/libcurl',
+  '/klystron',
   '/sw.js',
   '/sw-scramjet2.js',
+  '/sw-klystron.js',
   '/shortcuts.json',
+  '/ab-launcher.js',
 ];
 
 export default defineConfig({
   plugins: [
-    // `devToolsEnabled: false` disables preset-vite's "hook names" transform.
-    // That transform's CJS build does `require("zimmerframe")`, but zimmerframe
-    // is ESM-only (no `require`/`main` export), which crashes the dev server with
-    // `No "exports" main defined`. Production builds never load it, so they're
-    // unaffected. Trade-off: the Preact DevTools extension won't label hook
-    // variable names in dev — standard browser debugging is unchanged.
     preact({ devToolsEnabled: false }),
     tailwindcss(),
   ],

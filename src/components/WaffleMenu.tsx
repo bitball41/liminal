@@ -4,10 +4,6 @@ import { core, useBardoSelector } from "@/lib/useCore";
 import { gFav } from "@/lib/constants";
 import type { Shortcut } from "@/lib/types";
 
-// Every preset documented in shortcuts.json is implemented here. Names that are
-// not in this map fall back to the site favicon rather than leaking the literal
-// "preset:name" string into an <img src>, which previously fired a broken
-// request (ERR_UNKNOWN_URL_SCHEME) on every load for video/music/link/chat/news.
 const PRESET_ICONS: Record<string, React.ReactNode> = {
   home: <><path d="M2 7.5L8 2l6 5.5" /><path d="M4 6.5V14h3v-3h2v3h3V6.5" /></>,
   star: <polygon points="8,2 9.8,6.2 14.5,6.6 11,9.7 12.1,14.3 8,11.9 3.9,14.3 5,9.7 1.5,6.6 6.2,6.2" />,
@@ -34,13 +30,11 @@ function ShortcutIcon({ sc }: { sc: Shortcut }) {
         </svg>
       );
   }
-  // Real image URL, or favicon fallback for missing/unknown-preset icons.
   let src = isPreset ? "" : icon;
   if (!src) {
     try {
       src = gFav(new URL(sc.url).hostname);
     } catch {
-      /* unparseable */
     }
   }
   if (!src || failed) return <span className="waffle-icon-svg" />;

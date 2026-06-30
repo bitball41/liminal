@@ -1,7 +1,6 @@
-/* ── Reset ───────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Theme and layout tokens ─────────────────────────────────────── */
+
 :root {
   --bg: #000;
   --surface: #111;
@@ -29,13 +28,13 @@
 [data-theme="ember"]    { --bg:#0d0500; --surface:#140800; --border:#2d1500; --text:#f5e8d0; --muted:#9a6830; --hover:#1c0a00; --active:#241200; --accent:#e07820; }
 [data-theme="rose"]     { --bg:#0d0208; --surface:#140410; --border:#2d0824; --text:#f5d8ee; --muted:#9a5080; --hover:#1c0618; --active:#240a22; --accent:#e03880; }
 
-/* Neutral dark themes */
+
 [data-theme="slate"]    { --bg:#1b1b1f; --surface:#232328; --border:#34343c; --text:#d4d4d8; --muted:#8a8a96; --hover:#26262c; --active:#2f2f37; --accent:#4a9eff; }
 [data-theme="graphite"] { --bg:#161616; --surface:#1e1e1e; --border:#333333; --text:#e0e0e0; --muted:#888888; --hover:#242424; --active:#2c2c2c; --accent:#9aa0a6; }
 [data-theme="macchiato"]{ --bg:#1e2030; --surface:#24273a; --border:#363a4f; --text:#cad3f5; --muted:#8087a2; --hover:#2a2d42; --active:#363a4f; --accent:#c6a0f6; }
 [data-theme="mocha"]    { --bg:#181825; --surface:#1e1e2e; --border:#313244; --text:#cdd6f4; --muted:#7f849c; --hover:#242436; --active:#313244; --accent:#cba6f7; }
 
-/* Light themes */
+
 [data-theme="nebula"]   { --bg:#f3f0fb; --surface:#fbf9ff; --border:#d9cdf0; --text:#1a1330; --muted:#6f5f9a; --hover:#ebe4f8; --active:#e0d5f2; --accent:#6d4fd6; }
 [data-theme="daylight"] { --bg:#eef4fb; --surface:#fbfdff; --border:#c8d8ee; --text:#0f1b2e; --muted:#5a7196; --hover:#e3edf8; --active:#d6e4f4; --accent:#2f7ae0; }
 [data-theme="dawn"]     { --bg:#f4f0fb; --surface:#fdfbff; --border:#dcd0f2; --text:#1c1430; --muted:#71609c; --hover:#ece4f8; --active:#e2d6f4; --accent:#7a3fe0; }
@@ -44,7 +43,7 @@
 [data-theme="sand"]     { --bg:#fbf5ee; --surface:#fffdfb; --border:#eedfca; --text:#2e1f0d; --muted:#997a4f; --hover:#f8efe3; --active:#f4e6d6; --accent:#c25e10; }
 [data-theme="petal"]    { --bg:#fbf0f6; --surface:#fffbfd; --border:#eed0e2; --text:#2e1224; --muted:#996084; --hover:#f8e4f0; --active:#f4d6e8; --accent:#d12d72; }
 
-/* Neutral light themes — muted greys, deliberately not near-white */
+
 [data-theme="latte"]      { --bg:#cdd2dc; --surface:#dce0e8; --border:#bcc0cc; --text:#4c4f69; --muted:#6c6f85; --hover:#d3d7e0; --active:#c8cdd8; --accent:#8839ef; }
 [data-theme="cappuccino"] { --bg:#d6cab4; --surface:#e3d9c8; --border:#c9bba6; --text:#3b2f25; --muted:#8a7a66; --hover:#dacfba; --active:#cfc3aa; --accent:#a9744f; }
 [data-theme="stone"]      { --bg:#d6d6d1; --surface:#e2e2de; --border:#c2c2bc; --text:#33332f; --muted:#7a7a73; --hover:#d9d9d3; --active:#cecec8; --accent:#5b6472; }
@@ -60,10 +59,10 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 
-/* Prevent page-level display rules from overriding [hidden] */
+
 [hidden] { display: none !important; }
 
-/* ── Tab bar ─────────────────────────────────────────────────────── */
+
 #tab-bar {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--tabs-h);
@@ -135,8 +134,7 @@ button, input, select, textarea { font: inherit; }
 .tab.dragging { opacity: 0.4; }
 .tab.drag-over { background: color-mix(in srgb, var(--accent) 18%, var(--hover)); border-left: 2px solid var(--accent); }
 
-/* While a tab is being dragged, keep the proxy iframes from swallowing the
-   drag so dragover/drop/dragend keep firing in the parent document. */
+
 body.tab-dragging .nav-frame { pointer-events: none; }
 
 #btn-new-tab {
@@ -152,7 +150,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 #btn-new-tab:hover { color: var(--text); }
 #btn-new-tab:active { transform: scale(.85); }
 
-/* ── Browser chrome ──────────────────────────────────────────────── */
+
 #chrome {
   position: fixed; top: var(--tabs-h); left: 0; right: 0;
   height: var(--chrome-h);
@@ -215,7 +213,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 .gooey-address-bubble-surface { width: 28px !important; height: 28px !important; }
 .gooey-address-bubble-surface { border-radius: 50% !important; }
 
-/* ── Navigation progress bar ─────────────────────────────────────── */
+
 #progress-bar {
   position: absolute;
   left: 0; bottom: -1px;
@@ -231,7 +229,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 #progress-bar.active { opacity: 1; }
 #progress-bar.done { transition: width .18s ease-out, opacity .3s .15s; }
 
-/* ── Waffle menu ─────────────────────────────────────────────────── */
+
 #waffle-panel {
   position: fixed;
   background: var(--surface);
@@ -285,7 +283,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   font-family: inherit;
 }
 
-/* ── Bookmarks bar ───────────────────────────────────────────────── */
+
 #bookmarks-bar {
   position: fixed;
   top: calc(var(--tabs-h) + var(--chrome-h));
@@ -371,7 +369,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 .bm-add-btn svg { width: 12px; height: 12px; }
 .bm-add-btn:hover { color: var(--text); background: var(--hover); }
 
-/* ── New-tab page ────────────────────────────────────────────────── */
+
 #new-tab {
   position: fixed;
   top: var(--total-h); left: 0; right: 0; bottom: 0;
@@ -467,7 +465,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 .stealth-launch-btn svg { width: 15px; height: 15px; }
 .stealth-launch-btn:hover { background: var(--hover); border-color: var(--accent); }
 
-/* ── Nav frames ──────────────────────────────────────────────────── */
+
 .nav-frame {
   position: fixed;
   top: var(--total-h); left: 0; right: 0; bottom: 0;
@@ -475,7 +473,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   border: none;
 }
 
-/* ── Engine grid ─────────────────────────────────────────────────── */
+
 .engine-grid {
   display: flex;
   flex-direction: column;
@@ -501,7 +499,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 .engine-name { font-size: 13px; font-weight: 500; }
 .engine-hint { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
-/* ── Settings overlay ────────────────────────────────────────────── */
+
 #settings-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.55);
@@ -514,7 +512,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 }
 #settings-overlay.open { display: flex; opacity: 1; }
 
-/* ── Settings modal ──────────────────────────────────────────────── */
+
 #settings-modal {
   width: min(620px, 94vw);
   height: min(460px, 88vh);
@@ -553,7 +551,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   overflow: hidden;
 }
 
-/* Sidebar */
+
 .sm-sidebar {
   width: 136px;
   flex-shrink: 0;
@@ -589,7 +587,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   border-left-color: var(--accent);
 }
 
-/* Content area */
+
 .sm-content {
   flex: 1;
   overflow-y: auto;
@@ -619,7 +617,23 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   margin-bottom: 12px;
 }
 
-/* Theme picker — two columns, each button previews its own theme */
+
+.theme-groups { display: flex; flex-direction: column; gap: 18px; }
+.theme-section { display: flex; flex-direction: column; gap: 8px; }
+.theme-subhead {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text);
+  padding: 0 2px;
+}
+
+.theme-rec-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
 .theme-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -637,6 +651,8 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 
 .theme-btn {
   display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -650,8 +666,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 .theme-btn:hover { background: var(--active); }
 .theme-btn.active { border-color: var(--accent); }
 
-/* Self-painting preview buttons keep their inline theme colours; the
-   hover affordance is a subtle lift rather than a background swap. */
+
 .theme-preview { transition: filter .12s, transform .12s, box-shadow .12s; }
 .theme-preview:hover { filter: brightness(1.07); transform: translateY(-1px); }
 .theme-preview.active:hover { filter: none; }
@@ -663,7 +678,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   box-shadow: 0 0 0 1px rgba(128, 128, 128, .3);
 }
 
-/* Accent picker */
+
 .accent-row { display: flex; flex-wrap: wrap; gap: 7px; }
 .accent-swatch {
   width: 24px; height: 24px;
@@ -693,7 +708,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   border: none; padding: 0; background: none;
 }
 
-/* Cloak grid */
+
 .cloak-grid {
   display: flex;
   flex-wrap: wrap;
@@ -717,7 +732,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   background: color-mix(in srgb, var(--accent) 15%, var(--hover));
 }
 
-/* Setting rows */
+
 .setting-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px;
@@ -772,7 +787,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
 }
 .action-btn:hover { background: var(--active); border-color: var(--muted); }
 
-/* Keyboard shortcut reference (Advanced settings) */
+
 .shortcut-list { display: flex; flex-direction: column; gap: 6px; }
 .shortcut-row {
   display: flex; align-items: center; gap: 5px;
@@ -780,7 +795,7 @@ body.tab-dragging .nav-frame { pointer-events: none; }
   color: var(--text);
 }
 .shortcut-row > span { flex: 1; color: var(--muted); }
-/* Keep keycaps bright but the +/–// connectors muted, and never wrap a combo. */
+
 .shortcut-keys { flex-shrink: 0; white-space: nowrap; color: var(--muted); }
 kbd {
   display: inline-block;
@@ -802,7 +817,7 @@ kbd.kbd-inline {
   border-bottom-width: 1px;
 }
 
-/* Toggle switch */
+
 .toggle-wrap {
   position: relative;
   width: 36px; height: 20px;
@@ -834,7 +849,7 @@ kbd.kbd-inline {
   background: #fff;
 }
 
-/* ── Tab position grid (settings) ────────────────────────────────── */
+
 .tab-pos-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -859,7 +874,7 @@ kbd.kbd-inline {
 .tab-pos-btn.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--hover)); }
 .tab-pos-btn svg { width: 48px; height: 36px; }
 
-/* ── Layout: bottom tabs ─────────────────────────────────────────── */
+
 [data-tabs="bottom"] #tab-bar {
   top: auto;
   bottom: 0;
@@ -886,7 +901,7 @@ kbd.kbd-inline {
   border-top: 1px solid var(--surface);
 }
 
-/* ── Layout: left vertical tabs ──────────────────────────────────── */
+
 [data-tabs="left"] #tab-bar {
   top: 0;
   right: auto;
@@ -948,7 +963,7 @@ kbd.kbd-inline {
   height: calc(100% - var(--chrome-h) - var(--bookmarks-h));
 }
 
-/* ── Layout: right vertical tabs ─────────────────────────────────── */
+
 [data-tabs="right"] #tab-bar {
   left: auto;
   right: 0;
@@ -1014,7 +1029,7 @@ kbd.kbd-inline {
   height: calc(100% - var(--chrome-h) - var(--bookmarks-h));
 }
 
-/* ── New-tab clock + greeting ────────────────────────────────────── */
+
 #nt-clock {
   position: absolute;
   top: max(8vh, 40px);
@@ -1040,7 +1055,7 @@ kbd.kbd-inline {
   text-transform: uppercase;
 }
 
-/* ── New-tab quick links ─────────────────────────────────────────── */
+
 #nt-quicklinks {
   display: flex;
   flex-wrap: wrap;
@@ -1071,9 +1086,63 @@ kbd.kbd-inline {
 .ql-item img, .ql-item svg { width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0; }
 .ql-item svg { stroke: currentColor; }
 
-/* ── New-tab widgets ─────────────────────────────────────────────── */
-/* Each column is pinned to a bottom corner and grows upward, keeping the
-   centre (brand + search) clear no matter how many widgets are enabled. */
+/* --- Quick-link editing --- */
+.ql-item.ql-editing { cursor: grab; }
+.ql-item.ql-dragging { opacity: .45; }
+.ql-item .ql-grip { width: 13px; height: 13px; opacity: .5; cursor: grab; }
+.ql-item .ql-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 2px; border-radius: 50%; padding: 2px;
+  color: var(--muted, #888);
+}
+.ql-item .ql-remove:hover { color: #ff5555; background: color-mix(in srgb, #ff5555 18%, transparent); }
+.ql-item.ql-add { color: var(--muted, #888); border-style: dashed; }
+.ql-item.ql-add:hover { color: var(--text); }
+
+.ql-edit-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 5px 12px;
+  border: 1px solid transparent; border-radius: 16px;
+  background: transparent; color: var(--muted, #888);
+  font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.ql-edit-toggle:hover { color: var(--text); background: var(--hover); }
+.ql-edit-toggle svg { width: 13px; height: 13px; stroke: currentColor; }
+
+.ql-form-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+.ql-form {
+  display: flex; flex-direction: column; gap: 12px;
+  width: min(360px, 90vw); padding: 20px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.4);
+}
+.ql-form h3 { margin: 0 0 2px; font-size: 15px; }
+.ql-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted, #888); }
+.ql-form input {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg, var(--surface)); color: var(--text);
+  font-size: 13px; font-family: inherit;
+}
+.ql-form input:focus { outline: none; border-color: var(--accent); }
+.ql-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.ql-form-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.ql-form-btn:hover { background: var(--hover); }
+.ql-form-save { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ql-form-save svg { stroke: currentColor; }
+
+
+
 .nt-corner {
   position: absolute;
   bottom: 24px;
@@ -1087,8 +1156,7 @@ kbd.kbd-inline {
 #nt-widgets-left  { left: 24px; }
 #nt-widgets-right { right: 24px; }
 
-/* On narrower screens the corners would crowd the search box, so fall back to a
-   single centred column under the search bar. */
+
 @media (max-width: 1080px) {
   .nt-corner {
     position: static;
@@ -1147,11 +1215,11 @@ kbd.kbd-inline {
 .weather-meta { font-size: 12px; color: var(--muted); font-weight: 400; }
 .weather-loading { font-size: 12px; color: var(--muted); font-weight: 400; }
 
-/* Date widget */
+
 .date-day { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.1; }
 .date-full { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 
-/* To-do widget */
+
 .todo-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
 .todo-list:empty { display: none; }
 .todo-item {
@@ -1203,7 +1271,7 @@ kbd.kbd-inline {
 .todo-input:focus { border-color: var(--accent); }
 .todo-input::placeholder { color: var(--muted); }
 
-/* Focus timer widget */
+
 .widget-pomo { text-align: center; }
 .pomo-time {
   font-size: 34px;
@@ -1228,7 +1296,7 @@ kbd.kbd-inline {
 }
 .pomo-btn:hover { background: var(--active); border-color: var(--accent); }
 
-/* ── Settings: background picker ──────────────────────────────────── */
+
 .bg-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -1268,7 +1336,7 @@ kbd.kbd-inline {
 }
 .bg-swatch-image { background: var(--bg); }
 
-/* ── Dedicated History page ─────────────────────────────────────────── */
+
 #history-page {
   position: fixed; inset: 0;
   background: var(--bg);

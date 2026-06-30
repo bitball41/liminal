@@ -56,12 +56,6 @@ export function TabBar() {
   const [overId, setOverId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ id: number; x: number; y: number } | null>(null);
 
-  // Pointer-based tab reordering. We deliberately avoid the native HTML5
-  // drag-and-drop API: when a native drag passes over the cross-origin proxy
-  // iframes (.nav-frame) the OS drag loop's hit-testing breaks, so drop/dragend
-  // never fire and the whole page freezes mid-drag with nothing clickable.
-  // Pointer events + pointer capture never start an OS drag and keep firing on
-  // the captured tab even over an iframe, so reordering stays reliable.
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
 
   const tabIdAtPoint = (x: number, y: number): number | null => {
@@ -89,8 +83,8 @@ export function TabBar() {
               setCtxMenu({ id: tab.id, x: e.clientX, y: e.clientY });
             }}
             onPointerDown={(e) => {
-              if (e.button !== 0) return; // ignore right/middle click
-              if ((e.target as HTMLElement).closest(".tab-close")) return; // let close button handle it
+              if (e.button !== 0) return;
+              if ((e.target as HTMLElement).closest(".tab-close")) return;
               drag.current = { id: tab.id, x: e.clientX, y: e.clientY, moved: false };
               e.currentTarget.setPointerCapture(e.pointerId);
             }}
@@ -114,7 +108,7 @@ export function TabBar() {
                 const target = tabIdAtPoint(e.clientX, e.clientY);
                 if (target !== null && target !== d.id) core.reorderTab(d.id, target);
               } else {
-                core.activateTab(d.id); // treat a no-drag press as a plain click
+                core.activateTab(d.id);
               }
               endDrag();
             }}

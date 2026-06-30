@@ -8,8 +8,10 @@ import {
   SEARCH_ENGINES,
   SESSION_KEY,
   SETTINGS_KEY,
+  SHORTCUTS_KEY,
   SVC_PREFIX,
   SVC_PREFIX_V2,
+  SVC_PREFIX_KLYSTRON,
   TODOS_KEY,
 } from "./constants";
 import type {
@@ -23,13 +25,13 @@ import type {
   ScramjetControllerFactory,
   BareMuxConnection,
 } from "./types";
+import { toast } from "./toast";
 
-// Proxy globals injected by the deferred scripts in index.html.
 declare global {
   interface Window {
     BareMux: { BareMuxConnection: new (worker: string) => BareMuxConnection };
     $scramjetLoadController: () => ScramjetControllerFactory;
-    __bardoCtrl?: ScramjetController | { _prefix: string; createFrame: (iframe: HTMLIFrameElement) => Scramjet2Frame };
+    __bardoCtrl?: ScramjetController | { _prefix: string; createFrame: (iframe: HTMLIFrameElement) => PrefixFrame };
     eruda?: { init(): void; show(): void; hide(): void };
   }
 }
@@ -81,7 +83,6 @@ class BardoCore {
   private listeners = new Set<() => void>();
   private snapshot: Snapshot = this.buildSnapshot();
 
-  // ── Store plumbing (useSyncExternalStore) ───────────────────────
   subscribe = (cb: () => void) => {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
@@ -107,8 +108,6 @@ class BardoCore {
       })),
       activeId: this.activeTabId,
       activeUrl: active?.url ?? "",
-      // New-tab page shows whenever there's no loaded page, or while the engine
-      // is still booting (so the status line stays visible).
       showNewTab: !active || !active.url || !this.ctrlReady,
       canBack: !!active && (active.navCount >= 1 || active.inPageNavCount >= 1),
       canFwd: !!active && !!active.homeBackUrl,
@@ -124,7 +123,6 @@ class BardoCore {
     };
   }
 
-  // ── Settings ─────────────────────────────────────────────────────
   private loadSettings(): Settings {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
@@ -138,7 +136,7 @@ class BardoCore {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
     } catch (e: any) {
       if (e.name === "QuotaExceededError" || e.code === 22) {
-        import("./toast").then(({ toast }) => toast.error("Storage full — settings couldn't be saved."));
+        toast.error("Storage full — settings couldn't be saved.");
       }
     }
   }
@@ -150,7 +148,6 @@ class BardoCore {
     this.settings = { ...this.settings, [key]: value };
     this.saveSettings();
 
-    // Core-domain side effects (appearance side effects live in React).
     if (key === "engine") {
       this.initEngine();
     } else if (key === "restoreTabs") {
@@ -166,7 +163,6 @@ class BardoCore {
     this.emit();
   }
 
-  /** Restore every preference to its default, keeping saved bookmarks. */
   resetSettings() {
     const prevEngine = this.settings.engine;
     const bookmarks = this.settings.bookmarks;
@@ -177,7 +173,6 @@ class BardoCore {
     this.emit();
   }
 
-  // ── Mount point for proxy iframes ────────────────────────────────
   mount(host: HTMLElement) {
     this.host = host;
     for (const t of this.tabs) host.appendChild(t.iframe);
@@ -191,7 +186,6 @@ class BardoCore {
     this.loadShortcuts();
   }
 
-  // ── Tab management ───────────────────────────────────────────────
   private getActiveTab() {
     return this.tabs.find((t) => t.id === this.activeTabId) ?? null;
   }
@@ -279,7 +273,6 @@ class BardoCore {
       return;
     }
     if (this.activeTabId === id) {
-      // Prefer the next non-pinned tab, or the nearest tab overall
       const next = this.tabs.find((t, i) => i >= idx && !t.pinned) ?? this.tabs[Math.min(idx, this.tabs.length - 1)];
       this.activateTab(next.id);
     }
@@ -291,7 +284,6 @@ class BardoCore {
     const tab = this.tabs.find((t) => t.id === id);
     if (!tab || tab.pinned) return;
     tab.pinned = true;
-    // Move pinned tabs to the start of the list
     this.tabs.sort((a, b) => (a.pinned === b.pinned ? 0 : a.pinned ? -1 : 1));
     this.saveSession();
     this.emit();
@@ -341,7 +333,6 @@ class BardoCore {
     if (srcIdx === -1 || dstIdx === -1) return;
     const srcTab = this.tabs[srcIdx];
     const dstTab = this.tabs[dstIdx];
-    // Prevent moving a pinned tab after an unpinned tab, or vice versa
     if (srcTab.pinned !== dstTab.pinned) return;
     const [moved] = this.tabs.splice(srcIdx, 1);
     this.tabs.splice(dstIdx, 0, moved);
@@ -349,7 +340,6 @@ class BardoCore {
     this.emit();
   }
 
-  // ── Session persistence ──────────────────────────────────────────
   private saveSession() {
     if (this.restoring || !this.settings.restoreTabs) return;
     try {
@@ -363,7 +353,7 @@ class BardoCore {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ tabs: open, active }));
     } catch (e: any) {
       if (e.name === "QuotaExceededError" || e.code === 22) {
-        import("./toast").then(({ toast }) => toast.error("Storage full — session couldn't be saved."));
+        toast.error("Storage full — session couldn't be saved.");
       }
     }
   }
@@ -371,7 +361,6 @@ class BardoCore {
     try {
       localStorage.removeItem(SESSION_KEY);
     } catch {
-      /* ignore */
     }
   }
   private restoreSession() {
@@ -380,7 +369,6 @@ class BardoCore {
       try {
         data = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
       } catch {
-        /* ignore */
       }
     }
     const saved =
@@ -400,13 +388,11 @@ class BardoCore {
     this.saveSession();
   }
 
-  // ── Tab metadata + progress ──────────────────────────────────────
   private applyUrlMeta(tab: InternalTab, url: string) {
     let host = "";
     try {
       host = new URL(url).hostname;
     } catch {
-      /* unparseable */
     }
     tab.title = host || "Loading…";
     tab.favicon = host ? gFav(host) : null;
@@ -418,7 +404,6 @@ class BardoCore {
       const t = doc?.title?.trim();
       if (t) tab.title = t;
     } catch {
-      /* cross-origin / not ready */
     }
   }
 
@@ -437,7 +422,6 @@ class BardoCore {
     }, 320);
   }
 
-  // ── URL helpers ──────────────────────────────────────────────────
   toUrl(s: string) {
     s = s.trim();
     if (/^https?:\/\//i.test(s)) return s;
@@ -447,7 +431,9 @@ class BardoCore {
   }
 
   private activeSvcPrefix() {
-    return this.settings.engine === "scramjet2" ? SVC_PREFIX_V2 : SVC_PREFIX;
+    if (this.settings.engine === "scramjet2") return SVC_PREFIX_V2;
+    if (this.settings.engine === "klystron") return SVC_PREFIX_KLYSTRON;
+    return SVC_PREFIX;
   }
 
   proxiedUrl(rawUrl: string) {
@@ -459,7 +445,6 @@ class BardoCore {
     return location.origin + this.activeSvcPrefix() + encoded;
   }
 
-  // ── Navigation ───────────────────────────────────────────────────
   navigate(url: string) {
     const ctrl = window.__bardoCtrl;
     if (!ctrl) {
@@ -551,7 +536,6 @@ class BardoCore {
     this.emit();
   }
 
-  /** Address bar / search submit from chrome or new-tab page. */
   submitUrl(raw: string) {
     const v = raw.trim();
     if (v) this.navigate(this.toUrl(v));
@@ -563,9 +547,6 @@ class BardoCore {
     window.open(this.proxiedUrl(url), "_blank", "noopener,noreferrer");
   }
 
-  // ── Bookmarks ────────────────────────────────────────────────────
-  /** Returns the bookmarked title on success, "duplicate" if already saved,
-   * or null when there's no page to bookmark — lets the UI give feedback. */
   addBookmark(): { status: "added" | "duplicate" | "empty"; title?: string } {
     const tab = this.getActiveTab();
     if (!tab?.url) return { status: "empty" };
@@ -592,7 +573,6 @@ class BardoCore {
     this.patchSettings({ bookmarks: next });
   }
 
-  // ── WISP / engine init ───────────────────────────────────────────
   private checkWisp(url: string, timeoutMs = 8000) {
     return new Promise<boolean>((resolve) => {
       let settled = false;
@@ -604,7 +584,6 @@ class BardoCore {
         try {
           ws.close();
         } catch {
-          /* ignore */
         }
         resolve(ok);
       };
@@ -641,8 +620,6 @@ class BardoCore {
     if (!this.conn) this.conn = new window.BareMux.BareMuxConnection("/baremux/worker.js");
     const wsProto = location.protocol === "https:" ? "wss" : "ws";
     const localWisp = `${wsProto}://${location.host}/wisp/`;
-    // The same-origin endpoint is Bardo's fast path. Public probes only start
-    // if it fails, avoiding several unnecessary WebSockets on every launch.
     const localReady = await this.checkWisp(localWisp, 1500);
     const wispUrl = localReady
       ? localWisp
@@ -701,7 +678,8 @@ class BardoCore {
       return;
     }
     try {
-      if (this.settings.engine === "scramjet2") await this.initScramjet2();
+      if (this.settings.engine === "klystron") await this.initKlystron();
+      else if (this.settings.engine === "scramjet2") await this.initScramjet2();
       else await this.initScramjet();
     } catch (e: any) {
       console.error(`[bardo] init failed (attempt ${attempt}):`, e);
@@ -722,11 +700,6 @@ class BardoCore {
 
   private async initScramjet() {
     this.setStatus("Starting engine…");
-    // The WISP transport probe, the Scramjet controller (which fetches and
-    // compiles ~500 kB of wasm), and service-worker registration are mutually
-    // independent. Running them concurrently overlaps the network probe and the
-    // wasm download/compile instead of serializing them, which is the dominant
-    // cost of a cold boot. Navigation only proceeds once all three resolve.
     const [, ctrl, reg] = await Promise.all([
       this.setupTransport(),
       this.startScramjetController(),
@@ -768,7 +741,6 @@ class BardoCore {
 
   private async initScramjet2() {
     this.setStatus("Starting Scramjet v2…");
-    // Transport setup and SW registration are independent — overlap them.
     const [, reg] = await Promise.all([
       this.setupTransport(),
       this.registerSW("/sw-scramjet2.js", SVC_PREFIX_V2),
@@ -776,7 +748,31 @@ class BardoCore {
     this.scheduleSWUpdate(reg);
     window.__bardoCtrl = {
       _prefix: SVC_PREFIX_V2,
-      createFrame: (iframe: HTMLIFrameElement) => new Scramjet2Frame(iframe, SVC_PREFIX_V2),
+      createFrame: (iframe: HTMLIFrameElement) => new PrefixFrame(iframe, SVC_PREFIX_V2),
+    };
+    this.ctrlReady = true;
+    sessionStorage.removeItem("bardo-sw-fix-attempted");
+    this.setStatus("");
+    this.flushPending();
+  }
+
+  // Klystron is a server-side proxy: the Bardo server fetches and rewrites pages,
+  // so the client needs no bare-mux/wisp transport or wasm controller — just the
+  // companion service worker (scoped to /klystron/) to catch runtime requests.
+  private async initKlystron() {
+    this.setStatus("Starting Klystron…");
+    const reg = await this.registerSW("/sw-klystron.js", SVC_PREFIX_KLYSTRON);
+    this.scheduleSWUpdate(reg);
+    window.__bardoCtrl = {
+      _prefix: SVC_PREFIX_KLYSTRON,
+      createFrame: (iframe: HTMLIFrameElement) =>
+        new PrefixFrame(iframe, SVC_PREFIX_KLYSTRON, (href) => {
+          try {
+            return decodeURIComponent(href.slice((location.origin + SVC_PREFIX_KLYSTRON).length));
+          } catch {
+            return null;
+          }
+        }),
     };
     this.ctrlReady = true;
     sessionStorage.removeItem("bardo-sw-fix-attempted");
@@ -796,7 +792,11 @@ class BardoCore {
   async forceReload() {
     this.setStatus("Clearing cache…");
     for (const reg of await navigator.serviceWorker.getRegistrations()) {
-      if (reg.scope.includes(SVC_PREFIX) || reg.scope.includes(SVC_PREFIX_V2)) {
+      if (
+        reg.scope.includes(SVC_PREFIX) ||
+        reg.scope.includes(SVC_PREFIX_V2) ||
+        reg.scope.includes(SVC_PREFIX_KLYSTRON)
+      ) {
         await reg.unregister();
       }
     }
@@ -815,7 +815,6 @@ class BardoCore {
     this.emit();
   }
 
-  // ── History ──────────────────────────────────────────────────────
   private loadHistory(): HistoryEntry[] {
     try {
       return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
@@ -828,7 +827,7 @@ class BardoCore {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(this.history));
     } catch (e: any) {
       if (e.name === "QuotaExceededError" || e.code === 22) {
-        import("./toast").then(({ toast }) => toast.error("Storage full — history couldn't be saved."));
+        toast.error("Storage full — history couldn't be saved.");
       }
     }
   }
@@ -850,7 +849,6 @@ class BardoCore {
     this.saveHistory();
     this.emit();
   }
-  /** Clears history, returning the prior list so the UI can offer an undo. */
   clearHistory(): HistoryEntry[] {
     const prior = this.history;
     this.history = [];
@@ -864,8 +862,21 @@ class BardoCore {
     this.emit();
   }
 
-  // ── Shortcuts (waffle + quick links) ─────────────────────────────
   private async loadShortcuts() {
+    // User-customized shortcuts take precedence; the bundled JSON is only a seed.
+    try {
+      const raw = localStorage.getItem(SHORTCUTS_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data)) {
+          this.shortcuts = data.filter((s: any) => s && s.url);
+          this.emit();
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("[bardo] failed to read saved shortcuts:", e);
+    }
     try {
       const resp = await fetch("/shortcuts.json");
       if (!resp.ok) throw new Error("HTTP " + resp.status);
@@ -877,7 +888,67 @@ class BardoCore {
     }
   }
 
-  // ── Panic key ────────────────────────────────────────────────────
+  private saveShortcuts() {
+    try {
+      localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(this.shortcuts));
+    } catch (e: any) {
+      if (e.name === "QuotaExceededError" || e.code === 22) {
+        toast.error("Storage full — shortcut couldn't be saved.");
+      }
+    }
+  }
+
+  private normalizeShortcut(sc: Shortcut): Shortcut | null {
+    let url = (sc.url ?? "").trim();
+    if (!url) return null;
+    if (!/^[a-z]+:\/\//i.test(url)) url = "https://" + url;
+    let label = (sc.label ?? "").trim();
+    if (!label) {
+      try {
+        label = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        label = url;
+      }
+    }
+    const icon = sc.icon?.trim() || undefined;
+    return { label, url, icon };
+  }
+
+  addShortcut(sc: Shortcut) {
+    const next = this.normalizeShortcut(sc);
+    if (!next) return;
+    this.shortcuts = [...this.shortcuts, next];
+    this.saveShortcuts();
+    this.emit();
+  }
+
+  updateShortcut(index: number, sc: Shortcut) {
+    if (index < 0 || index >= this.shortcuts.length) return;
+    const next = this.normalizeShortcut(sc);
+    if (!next) return;
+    this.shortcuts = this.shortcuts.map((s, i) => (i === index ? next : s));
+    this.saveShortcuts();
+    this.emit();
+  }
+
+  removeShortcut(index: number) {
+    if (index < 0 || index >= this.shortcuts.length) return;
+    this.shortcuts = this.shortcuts.filter((_, i) => i !== index);
+    this.saveShortcuts();
+    this.emit();
+  }
+
+  reorderShortcuts(from: number, to: number) {
+    const n = this.shortcuts.length;
+    if (from < 0 || from >= n || to < 0 || to >= n || from === to) return;
+    const next = [...this.shortcuts];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    this.shortcuts = next;
+    this.saveShortcuts();
+    this.emit();
+  }
+
   panic() {
     try {
       localStorage.removeItem(SESSION_KEY);
@@ -885,36 +956,44 @@ class BardoCore {
       localStorage.removeItem(NOTES_KEY);
       localStorage.removeItem(TODOS_KEY);
     } catch {
-      /* ignore */
     }
     this.history = [];
-    window.location.replace(this.settings.panicUrl || "https://classroom.google.com");
+    let target = "https://classroom.google.com";
+    try {
+      const candidate = new URL(this.settings.panicUrl);
+      if (candidate.protocol === "http:" || candidate.protocol === "https:") target = candidate.href;
+    } catch {}
+    window.location.replace(target);
   }
 
-  /** Random accent helper used by the accent picker's shuffle (kept for parity). */
   randomAccent() {
     return ACCENTS[Math.floor(Math.random() * ACCENTS.length)].value;
   }
 }
 
-// Frame shim for Scramjet v2 — mirrors the ScramjetFrame API used by navigate().
-class Scramjet2Frame {
+// A frame driven purely by setting `iframe.src = prefix + encodeURIComponent(url)`.
+// Used by both the Scramjet v2 alpha and Klystron. An optional `decode` recovers
+// the real remote URL from the proxied href so the address bar / history stay
+// accurate (Klystron's prefix encoding is a plain encodeURIComponent).
+class PrefixFrame {
   private listeners: Record<string, ((e: any) => void)[]> = {};
   private iframe: HTMLIFrameElement;
   private prefix: string;
-  constructor(iframe: HTMLIFrameElement, prefix: string) {
+  private decode?: (href: string) => string | null;
+  constructor(iframe: HTMLIFrameElement, prefix: string, decode?: (href: string) => string | null) {
     this.iframe = iframe;
     this.prefix = prefix;
+    this.decode = decode;
     iframe.addEventListener("load", () => this.onLoad());
   }
   private onLoad() {
     try {
       const href = this.iframe.contentWindow?.location.href;
       if (href && href.startsWith(location.origin + this.prefix)) {
-        this.listeners.urlchange?.forEach((fn) => fn({ url: href }));
+        const url = this.decode ? this.decode(href) : href;
+        if (url) this.listeners.urlchange?.forEach((fn) => fn({ url }));
       }
     } catch {
-      /* cross-origin */
     }
   }
   go(url: string) {
@@ -940,7 +1019,6 @@ function gFav(domain: string) {
 
 export const core = new BardoCore();
 
-// Boot-time controllerchange reload guard (mirrors legacy boot block).
 const prevController = navigator.serviceWorker?.controller ?? null;
 navigator.serviceWorker?.addEventListener("controllerchange", () => {
   if (prevController) window.location.reload();

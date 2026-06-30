@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { NOTES_KEY, TODOS_KEY, WEATHER_KEY, wmo } from "@/lib/constants";
 
-// ── Date ───────────────────────────────────────────────────────────
 export function DateWidget() {
   const now = new Date();
   return (
@@ -17,7 +16,6 @@ export function DateWidget() {
   );
 }
 
-// ── Weather ────────────────────────────────────────────────────────
 interface WeatherData {
   temp: number;
   code: number;
@@ -47,7 +45,6 @@ export function WeatherWidget() {
             place = j.city || "";
           }
         } catch {
-          /* ignore */
         }
         if (lat == null || lon == null) {
           if (alive) {
@@ -59,13 +56,16 @@ export function WeatherWidget() {
         const wr = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=fahrenheit`,
         );
+        if (!wr.ok) throw new Error(`Weather request failed: ${wr.status}`);
         const wj = await wr.json();
         const c = wj.current || {};
+        if (!Number.isFinite(c.temperature_2m) || !Number.isFinite(c.weather_code)) {
+          throw new Error("Weather response was incomplete");
+        }
         const d: WeatherData = { temp: Math.round(c.temperature_2m), code: c.weather_code, place };
         try {
           localStorage.setItem(WEATHER_KEY, JSON.stringify({ ts: Date.now(), data: d }));
         } catch {
-          /* ignore */
         }
         if (alive) setData(d);
       } catch {
@@ -107,7 +107,6 @@ export function WeatherWidget() {
   );
 }
 
-// ── To-do ──────────────────────────────────────────────────────────
 interface Todo {
   text: string;
   done: boolean;
@@ -128,7 +127,6 @@ export function TodoWidget() {
     try {
       localStorage.setItem(TODOS_KEY, JSON.stringify(next));
     } catch {
-      /* ignore */
     }
   };
 
@@ -180,7 +178,6 @@ export function TodoWidget() {
   );
 }
 
-// ── Focus timer (Pomodoro) ─────────────────────────────────────────
 const POMO_DEFAULT = 25 * 60;
 function fmtClock(s: number) {
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -243,7 +240,6 @@ export function PomodoroWidget() {
   );
 }
 
-// ── Notes ──────────────────────────────────────────────────────────
 export function NotesWidget() {
   const [value, setValue] = useState(() => {
     try {
@@ -268,7 +264,6 @@ export function NotesWidget() {
           try {
             localStorage.setItem(NOTES_KEY, e.currentTarget.value);
           } catch {
-            /* ignore */
           }
         }}
       />
@@ -276,7 +271,6 @@ export function NotesWidget() {
   );
 }
 
-// ── Battery (laptops / Chromebooks / Macs) ─────────────────────────
 interface BatteryInfo {
   level: number;
   charging: boolean;

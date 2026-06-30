@@ -15,7 +15,6 @@ export interface Toast {
 }
 
 interface ToastOptions {
-  /** Milliseconds before auto-dismiss. 0 keeps it until dismissed. */
   duration?: number;
   action?: ToastAction;
 }
@@ -44,7 +43,6 @@ class ToastStore {
     const id = this.nextId++;
     const toast: Toast = { id, kind, message, action: opts.action };
     this.toasts.push(toast);
-    // Cap the stack so a burst of actions can't bury the screen.
     while (this.toasts.length > MAX_TOASTS) {
       const dropped = this.toasts.shift();
       if (dropped) this.clearTimer(dropped.id);

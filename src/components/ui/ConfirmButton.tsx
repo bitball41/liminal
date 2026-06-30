@@ -3,22 +3,14 @@ import { Icon, type IconName } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 interface ConfirmButtonProps {
-  /** Label in the resting state. */
   label: string;
-  /** Label shown once armed — defaults to "Click again to confirm". */
   confirmLabel?: string;
   icon?: IconName;
   onConfirm: () => void;
   className?: string;
-  /** Milliseconds the armed state stays active before reverting. */
   timeout?: number;
 }
 
-/**
- * Two-step destructive action button. The first click arms it (showing a
- * confirmation prompt); the second within the timeout commits. Clicking away or
- * waiting cancels — no modal, no accidental data loss.
- */
 export function ConfirmButton({
   label,
   confirmLabel = "Click again to confirm",

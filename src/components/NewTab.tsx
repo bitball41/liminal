@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { GooeyInput } from "@/components/ui/gooey-input";
 import { gFav } from "@/lib/constants";
+import { openStealthWindow } from "@/lib/stealth";
 import { core, shallowEqual, useBardoSelector } from "@/lib/useCore";
 import type { Shortcut } from "@/lib/types";
 
@@ -45,11 +46,60 @@ function QuickLinkIcon({ sc }: { sc: Shortcut }) {
     try {
       src = gFav(new URL(sc.url).hostname);
     } catch {
-      /* ignore */
     }
   }
   if (!src || failed) return null;
   return <img src={src} alt="" onError={() => setFailed(true)} />;
+}
+
+function ShortcutForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial: Shortcut | null;
+  onSave: (sc: Shortcut) => void;
+  onCancel: () => void;
+}) {
+  const [label, setLabel] = useState(initial?.label ?? "");
+  const [url, setUrl] = useState(initial?.url ?? "");
+  const [icon, setIcon] = useState(initial?.icon && !initial.icon.startsWith("preset:") ? initial.icon : "");
+
+  return (
+    <div className="ql-form-overlay" onClick={onCancel}>
+      <form
+        className="ql-form"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!url.trim()) return;
+          onSave({ label, url, icon: icon.trim() || undefined });
+        }}
+      >
+        <h3>{initial ? "Edit shortcut" : "Add shortcut"}</h3>
+        <label>
+          <span>URL</span>
+          <input autoFocus value={url} onInput={(e) => setUrl(e.currentTarget.value)} placeholder="example.com" />
+        </label>
+        <label>
+          <span>Name</span>
+          <input value={label} onInput={(e) => setLabel(e.currentTarget.value)} placeholder="Optional — defaults to site" />
+        </label>
+        <label>
+          <span>Icon URL</span>
+          <input value={icon} onInput={(e) => setIcon(e.currentTarget.value)} placeholder="Optional — defaults to favicon" />
+        </label>
+        <div className="ql-form-actions">
+          <button type="button" className="ql-form-btn" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="ql-form-btn ql-form-save">
+            <Icon name="check" size={14} /> Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 export function NewTab() {
@@ -65,7 +115,12 @@ export function NewTab() {
     shallowEqual,
   );
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<{ index: number | null } | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
   const statusLoading = !statusWarn && /loading|setting up|starting|registering|refreshing|clearing/i.test(status);
+  // Normal mode shows the top 6; edit mode reveals all so any can be managed/reordered.
+  const visible = editing ? shortcuts : shortcuts.slice(0, 6);
 
   return (
     <div id="new-tab" hidden={!showNewTab}>
@@ -129,15 +184,91 @@ export function NewTab() {
         {status}
       </p>
 
-      {settings.widgetQuickLinks && shortcuts.length > 0 && (
-        <div id="nt-quicklinks">
-          {shortcuts.slice(0, 6).map((sc, i) => (
-            <button key={i} className="ql-item" title={sc.url} onClick={() => core.navigate(sc.url)}>
-              <QuickLinkIcon sc={sc} />
-              <span>{sc.label}</span>
+      {settings.widgetQuickLinks && (
+        <>
+          <div id="nt-quicklinks" className={editing ? "editing" : undefined}>
+            {visible.map((sc, i) => (
+              <div
+                key={i}
+                className={`ql-item${editing ? " ql-editing" : ""}${dragIdx === i ? " ql-dragging" : ""}`}
+                title={sc.url}
+                role="button"
+                tabIndex={0}
+                draggable={editing}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (editing) setForm({ index: i });
+                    else core.navigate(sc.url);
+                  }
+                }}
+                onClick={() => {
+                  if (editing) setForm({ index: i });
+                  else core.navigate(sc.url);
+                }}
+                onDragStart={() => setDragIdx(i)}
+                onDragOver={(e) => {
+                  if (dragIdx === null || dragIdx === i) return;
+                  e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragIdx !== null && dragIdx !== i) core.reorderShortcuts(dragIdx, i);
+                  setDragIdx(null);
+                }}
+                onDragEnd={() => setDragIdx(null)}
+              >
+                {editing && <Icon name="grip" size={13} className="ql-grip" />}
+                <QuickLinkIcon sc={sc} />
+                <span>{sc.label}</span>
+                {editing && (
+                  <span
+                    className="ql-remove"
+                    role="button"
+                    aria-label="Remove shortcut"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      core.removeShortcut(i);
+                    }}
+                  >
+                    <Icon name="delete" size={13} />
+                  </span>
+                )}
+              </div>
+            ))}
+            {editing && (
+              <button className="ql-item ql-add" onClick={() => setForm({ index: null })}>
+                <Icon name="plus" size={14} />
+                <span>Add</span>
+              </button>
+            )}
+          </div>
+          {(shortcuts.length > 0 || editing) && (
+            <button
+              className="ql-edit-toggle"
+              onClick={() => {
+                setEditing((v) => !v);
+                setForm(null);
+                setDragIdx(null);
+              }}
+            >
+              <Icon name={editing ? "check" : "square-pen"} size={13} />
+              {editing ? "Done" : "Edit shortcuts"}
             </button>
-          ))}
-        </div>
+          )}
+        </>
+      )}
+
+      {form && (
+        <ShortcutForm
+          initial={form.index !== null ? shortcuts[form.index] ?? null : null}
+          onCancel={() => setForm(null)}
+          onSave={(sc) => {
+            if (form.index !== null) core.updateShortcut(form.index, sc);
+            else core.addShortcut(sc);
+            setForm(null);
+          }}
+        />
       )}
 
       <Suspense fallback={null}>
@@ -154,23 +285,11 @@ export function NewTab() {
       </Suspense>
 
       {abBlocked && (
-        <button className="stealth-launch-btn" style={{ display: "flex" }} onClick={launchStealth}>
+        <button className="stealth-launch-btn" style={{ display: "flex" }} onClick={() => openStealthWindow()}>
           <Icon name="eye" size={15} />
           Open in stealth tab
         </button>
       )}
     </div>
   );
-}
-
-function launchStealth() {
-  const src = location.href;
-  const w = window.open("about:blank", "_blank");
-  if (!w) return;
-  w.document.write(
-    `<!DOCTYPE html><html><head><title></title>` +
-      `<style>*{margin:0;padding:0}html,body,iframe{display:block;width:100%;height:100%;border:none;overflow:hidden}</style>` +
-      `</head><body><iframe src="${src}"></iframe></body></html>`,
-  );
-  w.document.close();
 }
