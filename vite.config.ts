@@ -5,15 +5,17 @@ import path from 'node:path';
 
 const EXPRESS = 'http://localhost:8080';
 const passthrough = [
+  '/sherpa',
   '/scramjet',
-  '/scramjet2',
   '/baremux',
   '/epoxy',
   '/libcurl',
   '/klystron',
+  '/opulent',
   '/sw.js',
-  '/sw-scramjet2.js',
+  '/sw-sherpa.js',
   '/sw-klystron.js',
+  '/sw-opulent.js',
   '/shortcuts.json',
   '/ab-launcher.js',
 ];

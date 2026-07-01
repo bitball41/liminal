@@ -10,8 +10,9 @@ import {
   SETTINGS_KEY,
   SHORTCUTS_KEY,
   SVC_PREFIX,
-  SVC_PREFIX_V2,
+  SVC_PREFIX_SHERPA,
   SVC_PREFIX_KLYSTRON,
+  SVC_PREFIX_OPULENT,
   TODOS_KEY,
 } from "./constants";
 import type {
@@ -23,6 +24,8 @@ import type {
   TabView,
   ScramjetController,
   ScramjetControllerFactory,
+  SherpaController,
+  SherpaControllerFactory,
   BareMuxConnection,
 } from "./types";
 import { toast } from "./toast";
@@ -31,7 +34,8 @@ declare global {
   interface Window {
     BareMux: { BareMuxConnection: new (worker: string) => BareMuxConnection };
     $scramjetLoadController: () => ScramjetControllerFactory;
-    __bardoCtrl?: ScramjetController | { _prefix: string; createFrame: (iframe: HTMLIFrameElement) => PrefixFrame };
+    $sherpaLoadController: () => SherpaControllerFactory;
+    __bardoCtrl?: ScramjetController | SherpaController | { _prefix: string; createFrame: (iframe: HTMLIFrameElement) => PrefixFrame };
     eruda?: { init(): void; show(): void; hide(): void };
   }
 }
@@ -126,7 +130,12 @@ class BardoCore {
   private loadSettings(): Settings {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+      const settings = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+      if (!["scramjet", "klystron", "opulent", "sherpa"].includes(settings.engine)) {
+        settings.engine = DEFAULT_SETTINGS.engine;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      return settings;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
@@ -431,18 +440,18 @@ class BardoCore {
   }
 
   private activeSvcPrefix() {
-    if (this.settings.engine === "scramjet2") return SVC_PREFIX_V2;
+    if (this.settings.engine === "sherpa") return SVC_PREFIX_SHERPA;
     if (this.settings.engine === "klystron") return SVC_PREFIX_KLYSTRON;
+    if (this.settings.engine === "opulent") return SVC_PREFIX_OPULENT;
     return SVC_PREFIX;
   }
 
   proxiedUrl(rawUrl: string) {
     const ctrl = window.__bardoCtrl;
-    const encoded =
-      ctrl && "encodeUrl" in ctrl && typeof ctrl.encodeUrl === "function"
-        ? ctrl.encodeUrl(rawUrl)
-        : encodeURIComponent(rawUrl);
-    return location.origin + this.activeSvcPrefix() + encoded;
+    if (ctrl && "encodeUrl" in ctrl && typeof ctrl.encodeUrl === "function") {
+      return new URL(ctrl.encodeUrl(rawUrl), location.origin).href;
+    }
+    return location.origin + this.activeSvcPrefix() + encodeURIComponent(rawUrl);
   }
 
   navigate(url: string) {
@@ -679,7 +688,8 @@ class BardoCore {
     }
     try {
       if (this.settings.engine === "klystron") await this.initKlystron();
-      else if (this.settings.engine === "scramjet2") await this.initScramjet2();
+      else if (this.settings.engine === "opulent") await this.initOpulent();
+      else if (this.settings.engine === "sherpa") await this.initSherpa();
       else await this.initScramjet();
     } catch (e: any) {
       console.error(`[bardo] init failed (attempt ${attempt}):`, e);
@@ -739,21 +749,45 @@ class BardoCore {
     return ctrl;
   }
 
-  private async initScramjet2() {
-    this.setStatus("Starting Scramjet v2…");
-    const [, reg] = await Promise.all([
+  private async initSherpa() {
+    this.setStatus("Starting Sherpa…");
+    const [, ctrl, reg] = await Promise.all([
       this.setupTransport(),
-      this.registerSW("/sw-scramjet2.js", SVC_PREFIX_V2),
+      this.startSherpaController(),
+      this.registerSW("/sw-sherpa.js", SVC_PREFIX_SHERPA),
     ]);
     this.scheduleSWUpdate(reg);
-    window.__bardoCtrl = {
-      _prefix: SVC_PREFIX_V2,
-      createFrame: (iframe: HTMLIFrameElement) => new PrefixFrame(iframe, SVC_PREFIX_V2),
-    };
+    window.__bardoCtrl = ctrl;
     this.ctrlReady = true;
     sessionStorage.removeItem("bardo-sw-fix-attempted");
     this.setStatus("");
     this.flushPending();
+  }
+
+  private async startSherpaController() {
+    const { SherpaController } = window.$sherpaLoadController();
+    const ctrl = new SherpaController({
+      prefix: SVC_PREFIX_SHERPA,
+      files: {
+        wasm: "/sherpa/sherpa.wasm.wasm",
+        all: "/sherpa/sherpa.all.js",
+        sync: "/sherpa/sherpa.sync.js",
+      },
+    });
+    try {
+      await ctrl.init();
+    } catch (e: any) {
+      if (e.message?.includes("object store") || e.message?.includes("IDBDatabase")) {
+        await new Promise<void>((resolve) => {
+          const request = indexedDB.deleteDatabase("$sherpa");
+          request.onsuccess = request.onerror = request.onblocked = () => resolve();
+        });
+        await ctrl.init();
+      } else {
+        throw e;
+      }
+    }
+    return ctrl;
   }
 
   // Klystron is a server-side proxy: the Bardo server fetches and rewrites pages,
@@ -780,6 +814,30 @@ class BardoCore {
     this.flushPending();
   }
 
+  // OpulentAPI is also a server-side proxy (same shape as Klystron), with an
+  // automatic headless-render fallback on the server for JS-heavy pages — no
+  // extra client-side wiring needed for that part.
+  private async initOpulent() {
+    this.setStatus("Starting OpulentAPI…");
+    const reg = await this.registerSW("/sw-opulent.js", SVC_PREFIX_OPULENT);
+    this.scheduleSWUpdate(reg);
+    window.__bardoCtrl = {
+      _prefix: SVC_PREFIX_OPULENT,
+      createFrame: (iframe: HTMLIFrameElement) =>
+        new PrefixFrame(iframe, SVC_PREFIX_OPULENT, (href) => {
+          try {
+            return decodeURIComponent(href.slice((location.origin + SVC_PREFIX_OPULENT).length));
+          } catch {
+            return null;
+          }
+        }),
+    };
+    this.ctrlReady = true;
+    sessionStorage.removeItem("bardo-sw-fix-attempted");
+    this.setStatus("");
+    this.flushPending();
+  }
+
   private flushPending() {
     if (this.pendingUrl) {
       const url = this.pendingUrl;
@@ -794,13 +852,14 @@ class BardoCore {
     for (const reg of await navigator.serviceWorker.getRegistrations()) {
       if (
         reg.scope.includes(SVC_PREFIX) ||
-        reg.scope.includes(SVC_PREFIX_V2) ||
-        reg.scope.includes(SVC_PREFIX_KLYSTRON)
+        reg.scope.includes(SVC_PREFIX_SHERPA) ||
+        reg.scope.includes(SVC_PREFIX_KLYSTRON) ||
+        reg.scope.includes(SVC_PREFIX_OPULENT)
       ) {
         await reg.unregister();
       }
     }
-    for (const db of ["$scramjet", "$scramjet2"]) {
+    for (const db of ["$scramjet", "$sherpa"]) {
       await new Promise<void>((resolve) => {
         const r = indexedDB.deleteDatabase(db);
         r.onsuccess = r.onerror = r.onblocked = () => resolve();
@@ -972,7 +1031,7 @@ class BardoCore {
 }
 
 // A frame driven purely by setting `iframe.src = prefix + encodeURIComponent(url)`.
-// Used by both the Scramjet v2 alpha and Klystron. An optional `decode` recovers
+// Used by the server-side engines. An optional `decode` recovers
 // the real remote URL from the proxied href so the address bar / history stay
 // accurate (Klystron's prefix encoding is a plain encodeURIComponent).
 class PrefixFrame {

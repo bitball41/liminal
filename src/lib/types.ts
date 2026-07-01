@@ -25,7 +25,7 @@ export type ThemeName =
   | "petal";
 
 export type TabPosition = "top" | "bottom" | "left" | "right";
-export type EngineName = "scramjet" | "scramjet2" | "klystron";
+export type EngineName = "scramjet" | "klystron" | "opulent" | "sherpa";
 export type WallpaperType = "none" | "gradient" | "image";
 
 export interface ScramjetController {
@@ -47,6 +47,19 @@ export interface ScramjetControllerFactory {
     prefix: string;
     files: { wasm: string; all: string; sync: string };
   }) => ScramjetController;
+}
+
+export interface SherpaController {
+  encodeUrl(url: string): string;
+  createFrame(iframe: HTMLIFrameElement): ScramjetFrame;
+  init(): Promise<void>;
+}
+
+export interface SherpaControllerFactory {
+  SherpaController: new (opts: {
+    prefix: string;
+    files: { wasm: string; all: string; sync: string };
+  }) => SherpaController;
 }
 
 export interface BareMuxConnection {

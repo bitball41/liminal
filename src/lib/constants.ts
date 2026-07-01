@@ -8,8 +8,9 @@ export const PUBLIC_WISP_SERVERS = [
 ];
 
 export const SVC_PREFIX = "/scramjet/service/";
-export const SVC_PREFIX_V2 = "/scramjet2/service/";
+export const SVC_PREFIX_SHERPA = "/sherpa/service/";
 export const SVC_PREFIX_KLYSTRON = "/klystron/";
+export const SVC_PREFIX_OPULENT = "/opulent/";
 
 export const BARDO_FAVICON =
   "data:image/svg+xml," +
@@ -112,7 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tabCloak: "none",
   bookmarksVisible: false,
   bookmarks: [],
-  searchEngine: "duckduckgo",
+  searchEngine: "startpage",
   panicKey: "",
   panicUrl: "https://classroom.google.com",
   erudaEnabled: false,

@@ -23,7 +23,8 @@
     "jsdom": "^29.1.1",
     "motion": "^12.42.0",
     "preact": "^10.27.2",
-    "scramjet-v2": "npm:@mercuryworkshop/scramjet@^2.0.2-alpha",
+    "puppeteer": "^25.2.1",
+    "sherpa": "https://github.com/bitball41/sherpa/archive/refs/tags/v1.1.0-sherpa.2.tar.gz",
     "tough-cookie": "^6.0.1",
     "tsx": "^4.21.0"
   },

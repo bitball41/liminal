@@ -486,13 +486,14 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
                 <div className="pane-label">Developer Tools</div>
                 <ToggleRow name="Enable Eruda DevTools" hint="Shows a devtools button in the toolbar to inspect and debug the page" k="erudaEnabled" s={s} />
                 <div className="pane-label">Engine</div>
-                <p className="pane-hint">Changes take effect after a reload. Scramjet v2 is experimental.</p>
+                <p className="pane-hint">Changes take effect after a reload.</p>
                 <div className="engine-grid">
                   {(
                     [
                       ["scramjet", "Scramjet v1", "Default — stable"],
-                      ["scramjet2", "Scramjet v2", "Alpha — experimental"],
                       ["klystron", "Klystron", "Server-side — beta"],
+                      ["opulent", "OpulentAPI", "Server-side — JS rendering, beta"],
+                      ["sherpa", "Sherpa", "Owned Scramjet fork — experimental"],
                     ] as [EngineName, string, string][]
                   ).map(([id, name, hint]) => (
                     <button key={id} className={cn("engine-btn", (s.engine || "scramjet") === id && "active")} onClick={() => core.setSetting("engine", id)}>
@@ -501,6 +502,13 @@ export function Settings({ open, onClose, onOpenHistory }: { open: boolean; onCl
                     </button>
                   ))}
                 </div>
+                <p className="pane-hint" style={{ marginTop: 8 }}>
+                  Sherpa is available under the AGPL-3.0 license.{" "}
+                  <a href="https://github.com/bitball41/sherpa" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                    View Sherpa source code
+                  </a>
+                  .
+                </p>
                 <div className="pane-label" style={{ marginTop: 16 }}>Maintenance</div>
                 <ConfirmButton
                   className="action-btn"

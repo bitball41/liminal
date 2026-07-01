@@ -1,15 +1,15 @@
 # Bardo
 
 Bardo is Liminal's fast, browser-based web proxy. Its interface is a Preact +
-TypeScript + Tailwind app, while Scramjet, BareMux, Epoxy, and Wisp provide the proxy
-transport and service-worker runtime.
+TypeScript + Tailwind app, while Scramjet, Sherpa, BareMux, Epoxy, and Wisp provide
+the proxy transport and service-worker runtime.
 
 ## Features
 
 - Multi-tab proxied browsing
 - Search, bookmarks, history, tab cloaking, and panic controls
 - Configurable themes, layouts, widgets, and about:blank launch mode
-- Scramjet v1 and experimental Scramjet v2 engines
+- Four selectable engines: Scramjet v1, Klystron, OpulentAPI, and Sherpa
 - Lazy-loaded settings, history, widgets, and developer tools
 - Cached and compressed proxy runtime assets
 
@@ -42,7 +42,7 @@ forwards the proxy/runtime paths to port 8080.
 ├── public/
 │   ├── ab-launcher.js
 │   ├── sw.js
-│   ├── sw-scramjet2.js
+│   ├── sw-sherpa.js
 │   ├── shortcuts.json
 ├── index.html
 ├── vite.config.ts

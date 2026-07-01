@@ -1,20 +1,19 @@
-// Klystron — a server-side proxy engine for Bardo.
+// OpulentAPI — a second server-side proxy engine for Bardo, alongside Klystron.
 //
-// Unlike Scramjet (which intercepts and rewrites everything client-side via a
-// service worker + wasm), Klystron does the work on the server: it fetches the
-// target URL with Node's `fetch`, rewrites every URL in the returned
-// HTML/CSS/JS so it points back through `/klystron/<encoded>`, and streams the
-// result to the iframe. A small companion service worker (sw-klystron.js)
-// catches the runtime requests the static rewrite can't see (fetch/XHR, dynamic
-// elements) and routes those back through here too.
+// Loosely inspired by https://github.com/IHATECAMOUFLAGE/opulentapi (by the
+// same author as Klystron), but rebuilt on Bardo's own safe primitives rather
+// than ported verbatim: the upstream project disables TLS certificate
+// validation on every outbound request, has no SSRF guard at all, and its
+// Ultraviolet mode hardcodes a third-party "bare" server on an unvetted
+// domain. None of that is carried over here — this engine reuses the same
+// SSRF guard, header handling, and jsdom rewriter as Klystron (./proxy-shared.ts).
 //
-// Ported from https://github.com/IHATECAMOUFLAGE/Klystron and adapted for Bardo:
-// the upstream `main` ↔ `fetch` response-shape mismatch is fixed, the response
-// header allow-list drops `content-length`/`x-frame-options` (we re-frame and
-// re-length the body), CSP is stripped per-response, and basic SSRF guards block
-// requests at private/loopback hosts. The SSRF guard, header handling, and URL
-// rewriter are shared with OpulentAPI (./proxy-shared.ts) so both engines get
-// the same protections.
+// The one capability worth keeping from upstream is rendering JS-heavy pages
+// through headless Chromium when a plain fetch only returns an empty
+// client-rendered shell. That render path is opt-in per-request (triggered by
+// a heuristic, not always-on), lazily imports `puppeteer` so it costs nothing
+// until it's actually used, and never keeps a browser resident between
+// requests.
 
 import express, { Router, type Request, type Response } from "express";
 import { Readable } from "node:stream";
@@ -23,6 +22,7 @@ import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { Duplex } from "node:stream";
 import { CookieJar } from "tough-cookie";
+import { JSDOM } from "jsdom";
 import {
   copyResponseHeaders,
   fetchUpstream,
@@ -32,15 +32,15 @@ import {
   type Upstream,
 } from "./proxy-shared.js";
 
-export const KLYSTRON_PREFIX = "/klystron/";
+export const OPULENT_PREFIX = "/opulent/";
 
 // ---------------------------------------------------------------------------
-// Per-session cookie jars. The browser holds an opaque `klystron_session` id;
-// each id maps to a server-side CookieJar so logins persist across requests.
+// Per-session cookie jars — same pattern as Klystron, kept separate so the two
+// engines don't share login state.
 // ---------------------------------------------------------------------------
 
 const jars = new Map<string, CookieJar>();
-const SESSION_COOKIE = "klystron_session";
+const SESSION_COOKIE = "opulent_session";
 const MAX_JARS = 1000;
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -70,31 +70,76 @@ function getSessionJar(req: Request, res: Response): CookieJar {
 }
 
 // ---------------------------------------------------------------------------
-// Response handling: stream binaries through untouched, rewrite text.
+// Headless-render fallback for JS-heavy pages. Lazily imports `puppeteer` so
+// it's never loaded — and Chromium never launched — unless a page actually
+// needs it. No persistent browser pool: each call launches, renders, closes.
+// ---------------------------------------------------------------------------
+
+const MAX_CONCURRENT_RENDERS = 2;
+let activeRenders = 0;
+
+// A static fetch that comes back this thin, with scripts present, looks like
+// an unrendered client-side-rendered shell rather than real content.
+const SHELL_TEXT_THRESHOLD = 150;
+
+function looksLikeEmptyShell(document: Document): boolean {
+  const text = document.body?.textContent?.trim() ?? "";
+  if (text.length >= SHELL_TEXT_THRESHOLD) return false;
+  return document.querySelectorAll("script").length > 0;
+}
+
+async function renderWithBrowser(target: string): Promise<string | null> {
+  if (activeRenders >= MAX_CONCURRENT_RENDERS) return null;
+
+  const parsed = new URL(target);
+  if (isBlockedHost(parsed.hostname)) return null;
+
+  activeRenders++;
+  let browser: import("puppeteer").Browser | undefined;
+  try {
+    const puppeteer = await import("puppeteer");
+    browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: true,
+    });
+    const page = await browser.newPage();
+    await page.goto(target, { waitUntil: "networkidle2", timeout: 15000 });
+    return await page.content();
+  } catch {
+    return null;
+  } finally {
+    activeRenders--;
+    try { await browser?.close(); } catch { /* already gone */ }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Response handling: stream binaries through untouched, rewrite text — with a
+// headless-render fallback for pages that come back as an empty JS shell.
 // ---------------------------------------------------------------------------
 
 async function handle(req: Request, res: Response): Promise<void> {
   let target: string;
   try {
     const raw = req.url.replace(/^\/+/, "").split("#")[0];
-    if (!raw) { res.status(400).type("text/plain").send("Klystron: missing target URL"); return; }
+    if (!raw) { res.status(400).type("text/plain").send("OpulentAPI: missing target URL"); return; }
     target = decodeURIComponent(raw);
   } catch {
-    res.status(400).type("text/plain").send("Klystron: malformed target URL");
+    res.status(400).type("text/plain").send("OpulentAPI: malformed target URL");
     return;
   }
 
   let parsed: URL;
   try { parsed = new URL(target); } catch {
-    res.status(400).type("text/plain").send("Klystron: invalid URL");
+    res.status(400).type("text/plain").send("OpulentAPI: invalid URL");
     return;
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    res.status(400).type("text/plain").send("Klystron: only http(s) is supported");
+    res.status(400).type("text/plain").send("OpulentAPI: only http(s) is supported");
     return;
   }
   if (isBlockedHost(parsed.hostname)) {
-    res.status(403).type("text/plain").send("Klystron: blocked host");
+    res.status(403).type("text/plain").send("OpulentAPI: blocked host");
     return;
   }
 
@@ -103,10 +148,10 @@ async function handle(req: Request, res: Response): Promise<void> {
 
   let upstream: Upstream;
   try {
-    upstream = await fetchUpstream(target, req, jar, bodyBuf, KLYSTRON_PREFIX);
+    upstream = await fetchUpstream(target, req, jar, bodyBuf, OPULENT_PREFIX);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
-    res.status(502).type("text/plain").send(`Klystron upstream error: ${message}`);
+    res.status(502).type("text/plain").send(`OpulentAPI upstream error: ${message}`);
     return;
   }
 
@@ -127,20 +172,29 @@ async function handle(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const text = await ures.text();
-  res.send(rewrite(finalUrl, text, contentType, KLYSTRON_PREFIX));
+  let text = await ures.text();
+
+  if (req.method.toUpperCase() === "GET" && contentType.toLowerCase().includes("text/html")) {
+    const dom = new JSDOM(text, { url: finalUrl });
+    if (looksLikeEmptyShell(dom.window.document)) {
+      const rendered = await renderWithBrowser(finalUrl);
+      if (rendered) text = rendered;
+    }
+  }
+
+  res.send(rewrite(finalUrl, text, contentType, OPULENT_PREFIX));
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket upgrade passthrough for /klystron/<encoded-ws-url>.
+// WebSocket upgrade passthrough for /opulent/<encoded-ws-url>.
 // ---------------------------------------------------------------------------
 
 function parseUpgradeTarget(reqUrl: string | undefined): string | null {
-  if (!reqUrl || !reqUrl.startsWith(KLYSTRON_PREFIX)) return null;
-  try { return decodeURIComponent(reqUrl.slice(KLYSTRON_PREFIX.length)); } catch { return null; }
+  if (!reqUrl || !reqUrl.startsWith(OPULENT_PREFIX)) return null;
+  try { return decodeURIComponent(reqUrl.slice(OPULENT_PREFIX.length)); } catch { return null; }
 }
 
-export function klystronUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+export function opulentUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
   const target = parseUpgradeTarget(req.url);
   if (!target) { socket.destroy(); return; }
 
@@ -180,10 +234,10 @@ export function klystronUpgrade(req: IncomingMessage, socket: Duplex, head: Buff
 }
 
 // ---------------------------------------------------------------------------
-// Express router, mounted at /klystron.
+// Express router, mounted at /opulent.
 // ---------------------------------------------------------------------------
 
-export function klystronRouter(): Router {
+export function opulentRouter(): Router {
   const router = Router();
   // Buffer the request body so POSTs (and redirect replays) keep their payload.
   router.use(express.raw({ type: () => true, limit: "25mb" }));
@@ -191,7 +245,7 @@ export function klystronRouter(): Router {
     handle(req, res).catch((err) => {
       if (res.headersSent) { res.destroy(); return; }
       const message = err instanceof Error ? err.message : "unknown error";
-      res.status(500).type("text/plain").send(`Klystron error: ${message}`);
+      res.status(500).type("text/plain").send(`OpulentAPI error: ${message}`);
     });
   });
   return router;
