@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { Icon } from "@/components/icons";
 import { GooeyInput } from "@/components/ui/gooey-input";
 import { gFav } from "@/lib/constants";
@@ -64,11 +64,26 @@ function ShortcutForm({
   const [label, setLabel] = useState(initial?.label ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [icon, setIcon] = useState(initial?.icon && !initial.icon.startsWith("preset:") ? initial.icon : "");
+  const titleId = useId();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
 
   return (
     <div className="ql-form-overlay" onClick={onCancel}>
       <form
         className="ql-form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
@@ -76,7 +91,7 @@ function ShortcutForm({
           onSave({ label, url, icon: icon.trim() || undefined });
         }}
       >
-        <h3>{initial ? "Edit shortcut" : "Add shortcut"}</h3>
+        <h3 id={titleId}>{initial ? "Edit shortcut" : "Add shortcut"}</h3>
         <label>
           <span>URL</span>
           <input autoFocus value={url} onInput={(e) => setUrl(e.currentTarget.value)} placeholder="example.com" />

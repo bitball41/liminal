@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { core, useBardoSelector } from "@/lib/useCore";
 import type { TabView } from "@/lib/types";
@@ -58,6 +58,22 @@ export function TabBar() {
 
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
 
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest(".tab-ctx-menu")) setCtxMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCtxMenu(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [ctxMenu]);
+
   const tabIdAtPoint = (x: number, y: number): number | null => {
     const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(".tab");
     return el?.dataset.tabId ? Number(el.dataset.tabId) : null;
@@ -72,15 +88,23 @@ export function TabBar() {
 
   return (
     <div id="tab-bar">
-      <div id="tab-bar-tabs">
+      <div id="tab-bar-tabs" role="tablist" aria-label="Open tabs">
         {tabs.map((tab) => (
           <div
             key={tab.id}
             data-tab-id={tab.id}
             className={cn("tab", tab.active && "active", overId === tab.id && "drag-over", dragId === tab.id && "dragging", tab.pinned && "pinned")}
+            role="tab"
+            tabIndex={tab.active ? 0 : -1}
+            aria-selected={tab.active}
+            aria-label={tab.title}
             onContextMenu={(e) => {
               e.preventDefault();
-              setCtxMenu({ id: tab.id, x: e.clientX, y: e.clientY });
+              setCtxMenu({
+                id: tab.id,
+                x: Math.min(e.clientX, window.innerWidth - 152),
+                y: Math.min(e.clientY, window.innerHeight - 112),
+              });
             }}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
@@ -113,12 +137,25 @@ export function TabBar() {
               endDrag();
             }}
             onPointerCancel={endDrag}
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                core.closeTab(tab.id);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                core.activateTab(tab.id);
+              }
+            }}
           >
             <TabFavicon tab={tab} />
             <span className={cn("tab-title", tab.pinned && "pinned")}>{tab.title}</span>
             <button
               className="tab-close"
               title="Close tab"
+              aria-label={`Close ${tab.title}`}
               onClick={(e) => {
                 e.stopPropagation();
                 core.closeTab(tab.id);
@@ -142,15 +179,15 @@ export function TabBar() {
           style={{ position: "fixed", left: ctxMenu.x, top: ctxMenu.y, zIndex: 100 }}
           onClick={() => setCtxMenu(null)}
         >
-          <div className="tab-ctx-item" onClick={() => { core.togglePinTab(ctxMenu.id); setCtxMenu(null); }}>
+          <button className="tab-ctx-item" onClick={() => { core.togglePinTab(ctxMenu.id); setCtxMenu(null); }}>
             {tabs.find((t) => t.id === ctxMenu.id)?.pinned ? "Unpin" : "Pin"}
-          </div>
-          <div className="tab-ctx-item" onClick={() => { core.closeTab(ctxMenu.id); setCtxMenu(null); }}>
+          </button>
+          <button className="tab-ctx-item" onClick={() => { core.closeTab(ctxMenu.id); setCtxMenu(null); }}>
             Close tab
-          </div>
-          <div className="tab-ctx-item" onClick={() => { core.reload(); setCtxMenu(null); }}>
+          </button>
+          <button className="tab-ctx-item" onClick={() => { core.reloadTab(ctxMenu.id); setCtxMenu(null); }}>
             Reload
-          </div>
+          </button>
         </div>
       )}
     </div>

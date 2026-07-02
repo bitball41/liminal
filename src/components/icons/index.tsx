@@ -130,14 +130,17 @@ export function Icon({ name, anim, size = 16, className, style, ...rest }: IconP
       return;
     }
 
+    // data-anim is set by custom themes with a reduced/none animation level.
     if (anim === "loader") {
-      h.startAnimation();
+      if (!document.documentElement.hasAttribute("data-anim")) h.startAnimation();
       return;
     }
 
     const trigger = host.current?.closest("button, .widget-card, .ai-trigger") ?? host.current;
     if (!trigger) return;
-    const start = () => h.startAnimation();
+    const start = () => {
+      if (!document.documentElement.hasAttribute("data-anim")) h.startAnimation();
+    };
     const stop = () => h.stopAnimation();
     trigger.addEventListener("pointerenter", start);
     trigger.addEventListener("pointerleave", stop);

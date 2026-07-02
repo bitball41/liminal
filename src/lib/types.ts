@@ -28,6 +28,37 @@ export type TabPosition = "top" | "bottom" | "left" | "right";
 export type EngineName = "scramjet" | "klystron" | "opulent" | "sherpa";
 export type WallpaperType = "none" | "gradient" | "image";
 
+export type CustomThemeId = `custom:${string}`;
+export type ThemeMode = "dark" | "light";
+export type Density = "compact" | "comfortable" | "spacious";
+export type AnimationLevel = "full" | "reduced" | "none";
+
+export interface CustomThemeColors {
+  bg: string;
+  surface: string;
+  border: string;
+  text: string;
+  muted: string;
+  hover: string;
+  active: string;
+  accent: string;
+  accentContrast: string;
+}
+
+export interface CustomTheme {
+  id: CustomThemeId;
+  name: string;
+  mode: ThemeMode;
+  /** Built-in theme this was derived from; used by the editor's Reset action. */
+  base: string;
+  colors: CustomThemeColors;
+  radius: number;
+  density: Density;
+  font: string;
+  glass: { enabled: boolean; blur: number; opacity: number };
+  animation: AnimationLevel;
+}
+
 export interface ScramjetController {
   encodeUrl(url: string): string;
   createFrame(iframe: HTMLIFrameElement): ScramjetFrame;
@@ -73,7 +104,7 @@ export interface Bookmark {
 }
 
 export interface Settings {
-  theme: ThemeName;
+  theme: ThemeName | CustomThemeId;
   aboutBlankMode: boolean;
   tabCloak: string;
   bookmarksVisible: boolean;

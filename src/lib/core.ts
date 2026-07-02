@@ -13,10 +13,12 @@ import {
   SVC_PREFIX_SHERPA,
   SVC_PREFIX_KLYSTRON,
   SVC_PREFIX_OPULENT,
+  THEMES,
   TODOS_KEY,
 } from "./constants";
 import type {
   Bookmark,
+  CustomTheme,
   HistoryEntry,
   InternalTab,
   Settings,
@@ -28,6 +30,17 @@ import type {
   SherpaControllerFactory,
   BareMuxConnection,
 } from "./types";
+import {
+  DEFAULT_TOOLBAR,
+  loadToolbar,
+  makeEntry,
+  sanitizeToolbarIds,
+  saveToolbar,
+  toEntries,
+  type ToolbarEntry,
+  type ToolbarItemId,
+} from "./toolbar";
+import { loadCustomThemes, MAX_CUSTOM_THEMES, sanitizeCustomTheme, saveCustomThemes } from "./customThemes";
 import { toast } from "./toast";
 
 declare global {
@@ -55,6 +68,8 @@ export interface Snapshot {
   settings: Settings;
   history: HistoryEntry[];
   shortcuts: Shortcut[];
+  toolbar: ToolbarEntry[];
+  customThemes: CustomTheme[];
   ctrlReady: boolean;
   abLaunched: boolean;
   abBlocked: boolean;
@@ -83,6 +98,8 @@ class BardoCore {
 
   private history: HistoryEntry[] = this.loadHistory();
   private shortcuts: Shortcut[] = [];
+  private toolbar: ToolbarEntry[] = toEntries(loadToolbar());
+  private customThemes: CustomTheme[] = loadCustomThemes();
 
   private listeners = new Set<() => void>();
   private snapshot: Snapshot = this.buildSnapshot();
@@ -121,6 +138,8 @@ class BardoCore {
       settings: this.settings,
       history: this.history,
       shortcuts: this.shortcuts,
+      toolbar: this.toolbar,
+      customThemes: this.customThemes,
       ctrlReady: this.ctrlReady,
       abLaunched: !!window.__bardoAbLaunched,
       abBlocked: !!window.__bardoAbBlocked,
@@ -134,6 +153,12 @@ class BardoCore {
       if (!["scramjet", "klystron", "opulent", "sherpa"].includes(settings.engine)) {
         settings.engine = DEFAULT_SETTINGS.engine;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      if (
+        typeof settings.theme !== "string" ||
+        (!settings.theme.startsWith("custom:") && !THEMES.some((t) => t.id === settings.theme))
+      ) {
+        settings.theme = DEFAULT_SETTINGS.theme;
       }
       return settings;
     } catch {
@@ -180,6 +205,66 @@ class BardoCore {
     if (this.settings.engine !== prevEngine) this.initEngine();
     if (!this.settings.restoreTabs) this.clearSession();
     this.emit();
+  }
+
+  private commitToolbar(entries: ToolbarEntry[]) {
+    const ids = sanitizeToolbarIds(entries.map((e) => e.id));
+    if (!ids) return;
+    this.toolbar = entries;
+    if (!saveToolbar(ids)) toast.error("Storage full — toolbar couldn't be saved.");
+    this.emit();
+  }
+
+  setToolbar(entries: ToolbarEntry[]) {
+    this.commitToolbar([...entries]);
+  }
+
+  addToolbarItem(id: ToolbarItemId, index?: number) {
+    const next = [...this.toolbar];
+    next.splice(index ?? next.length, 0, makeEntry(id));
+    this.commitToolbar(next);
+  }
+
+  removeToolbarItem(key: string) {
+    if (this.toolbar.length <= 1) return;
+    this.commitToolbar(this.toolbar.filter((e) => e.key !== key));
+  }
+
+  moveToolbarItem(key: string, to: number) {
+    const from = this.toolbar.findIndex((e) => e.key === key);
+    if (from === -1 || to < 0 || to >= this.toolbar.length || from === to) return;
+    const next = [...this.toolbar];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    this.commitToolbar(next);
+  }
+
+  resetToolbar() {
+    this.commitToolbar(toEntries([...DEFAULT_TOOLBAR]));
+  }
+
+  upsertCustomTheme(theme: CustomTheme): boolean {
+    const clean = sanitizeCustomTheme(theme);
+    if (!clean) return false;
+    const index = this.customThemes.findIndex((t) => t.id === clean.id);
+    if (index === -1 && this.customThemes.length >= MAX_CUSTOM_THEMES) {
+      toast.error(`You can keep up to ${MAX_CUSTOM_THEMES} custom themes.`);
+      return false;
+    }
+    const next = [...this.customThemes];
+    if (index === -1) next.push(clean);
+    else next[index] = clean;
+    this.customThemes = next;
+    if (!saveCustomThemes(next)) toast.error("Storage full — theme couldn't be saved.");
+    this.emit();
+    return true;
+  }
+
+  deleteCustomTheme(id: string) {
+    this.customThemes = this.customThemes.filter((t) => t.id !== id);
+    saveCustomThemes(this.customThemes);
+    if (this.settings.theme === id) this.setSetting("theme", "dark");
+    else this.emit();
   }
 
   mount(host: HTMLElement) {
@@ -530,8 +615,24 @@ class BardoCore {
 
   reload() {
     const tab = this.getActiveTab();
-    if (tab?.url) tab.frame?.reload();
-    else this.initEngine();
+    if (tab) this.reloadTab(tab.id);
+  }
+
+  reloadTab(id: number) {
+    const tab = this.tabs.find((candidate) => candidate.id === id);
+    if (!tab) return;
+    if (!tab.url) {
+      if (tab.id === this.activeTabId) this.initEngine();
+      return;
+    }
+    if (tab.suspended) {
+      this.activateTab(tab.id);
+      return;
+    }
+    tab.loading = true;
+    if (tab.id === this.activeTabId) this.startProgress();
+    tab.frame?.reload();
+    this.emit();
   }
 
   goHome() {

@@ -55,8 +55,19 @@ export function WaffleMenu() {
     const onDoc = (e: MouseEvent) => {
       if (!panelRef.current?.contains(e.target as Node) && e.target !== btnRef.current) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    };
     document.addEventListener("click", onDoc);
-    return () => document.removeEventListener("click", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
@@ -65,6 +76,9 @@ export function WaffleMenu() {
         ref={btnRef}
         className="nav-btn"
         title="Shortcuts"
+        aria-label="Shortcuts"
+        aria-expanded={open}
+        aria-controls="waffle-panel"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
@@ -76,6 +90,8 @@ export function WaffleMenu() {
         ref={panelRef}
         id="waffle-panel"
         className={open ? "open" : ""}
+        role="menu"
+        aria-hidden={!open}
         style={{ top: pos.top, right: pos.right }}
       >
         {shortcuts.length === 0 ? (
@@ -88,6 +104,7 @@ export function WaffleMenu() {
               key={i}
               className="waffle-item"
               title={sc.label}
+              role="menuitem"
               onClick={() => {
                 setOpen(false);
                 core.navigate(sc.url);

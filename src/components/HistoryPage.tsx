@@ -60,7 +60,7 @@ export function HistoryPage({ open, onClose, onOpenUrl }: HistoryPageProps) {
   }
 
   return (
-    <div id="history-page" className={open ? "open" : ""}>
+    <div id="history-page" className={open ? "open" : ""} role="dialog" aria-modal="true" aria-label="Browsing history">
       <div className="hp-header">
         <button id="btn-history-back" className="nav-btn" title="Close history" onClick={onClose}>
           <Icon name="arrow-left" size={15} />

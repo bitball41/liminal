@@ -15,6 +15,9 @@ export function TabSwitcher({ open, onClose }: { open: boolean; onClose: () => v
       t.title.toLowerCase().includes(query.toLowerCase()) ||
       t.url.toLowerCase().includes(query.toLowerCase()),
   );
+  const activeDescendant = filtered[selected]
+    ? `tab-switcher-item-${filtered[selected].id}`
+    : undefined;
 
   useEffect(() => {
     if (open) {
@@ -65,7 +68,7 @@ export function TabSwitcher({ open, onClose }: { open: boolean; onClose: () => v
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="tab-switcher" role="dialog" aria-label="Tab switcher">
+      <div className="tab-switcher" role="dialog" aria-modal="true" aria-label="Tab switcher">
         <input
           ref={inputRef}
           className="tab-switcher-input"
@@ -77,7 +80,7 @@ export function TabSwitcher({ open, onClose }: { open: boolean; onClose: () => v
           }}
           aria-autocomplete="list"
           aria-controls="tab-switcher-list"
-          aria-activedescendant={`tab-switcher-item-${selected}`}
+          aria-activedescendant={activeDescendant}
         />
         <div id="tab-switcher-list" className="tab-switcher-list" role="listbox">
           {filtered.length === 0 && (

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { Chrome } from "@/components/Chrome";
 import { TabBar } from "@/components/TabBar";
@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TabSwitcher } from "@/components/TabSwitcher";
 import { Toaster } from "@/components/ui/Toaster";
 import { BARDO_FAVICON, TAB_CLOAKS, WALLPAPER_KEY } from "@/lib/constants";
+import { applyThemeToDocument } from "@/lib/customThemes";
 import { core, shallowEqual, useBardoSelector } from "@/lib/useCore";
 
 const HistoryPage = lazy(() =>
@@ -19,29 +20,23 @@ const Settings = lazy(() =>
 );
 
 export default function App() {
-  const { settings: s, abLaunched } = useBardoSelector(
-    (snapshot) => ({ settings: snapshot.settings, abLaunched: snapshot.abLaunched }),
+  const { settings: s, abLaunched, customThemes } = useBardoSelector(
+    (snapshot) => ({ settings: snapshot.settings, abLaunched: snapshot.abLaunched, customThemes: snapshot.customThemes }),
     shallowEqual,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenControlsVisible, setFullscreenControlsVisible] = useState(false);
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
-  const [fsHover, setFsHover] = useState(false);
-  const fsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     core.boot();
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", s.theme || "dark");
-  }, [s.theme]);
-
-  useEffect(() => {
-    if (s.accent) document.documentElement.style.setProperty("--accent", s.accent);
-    else document.documentElement.style.removeProperty("--accent");
-  }, [s.accent]);
+    applyThemeToDocument(s, customThemes);
+  }, [s.theme, s.accent, customThemes]);
 
   useEffect(() => {
     const cloak = TAB_CLOAKS[s.tabCloak] || TAB_CLOAKS.none;
@@ -68,7 +63,10 @@ export default function App() {
 
   useEffect(() => {
     if (fullscreen) document.documentElement.setAttribute("data-fullscreen", "");
-    else document.documentElement.removeAttribute("data-fullscreen");
+    else {
+      document.documentElement.removeAttribute("data-fullscreen");
+      setFullscreenControlsVisible(false);
+    }
   }, [fullscreen]);
 
   useEffect(() => {
@@ -109,20 +107,6 @@ export default function App() {
   }, [settingsOpen, historyOpen]);
 
   useEffect(() => {
-    if (!fullscreen) return;
-    const el = fsRef.current;
-    if (!el) return;
-    const show = () => setFsHover(true);
-    const hide = () => setFsHover(false);
-    el.addEventListener("pointerenter", show);
-    el.addEventListener("pointerleave", hide);
-    return () => {
-      el.removeEventListener("pointerenter", show);
-      el.removeEventListener("pointerleave", hide);
-    };
-  }, [fullscreen]);
-
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable;
@@ -139,6 +123,12 @@ export default function App() {
       if (e.key === "Escape" && historyOpen) {
         e.preventDefault();
         setHistoryOpen(false);
+        return;
+      }
+
+      if (e.key === "Escape" && settingsOpen) {
+        e.preventDefault();
+        setSettingsOpen(false);
         return;
       }
 
@@ -224,11 +214,12 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div ref={fsRef} style={{ position: "fixed", inset: 0 }}>
+      <div style={{ position: "fixed", inset: 0 }}>
         <TabBar />
         <Chrome
           onSettings={() => setSettingsOpen(true)}
           onHistory={() => setHistoryOpen(true)}
+          onTabSwitcher={() => setTabSwitcherOpen(true)}
           fullscreen={fullscreen}
           onToggleFullscreen={() => setFullscreen((f) => !f)}
         />
@@ -237,36 +228,18 @@ export default function App() {
         <FrameHost />
 
         {fullscreen && (
-          <button className="fs-exit" title="Exit fullscreen" onClick={() => setFullscreen(false)}>
-            <Icon name="maximize-2" size={14} />
-            Exit fullscreen
-          </button>
-        )}
-
-        {fullscreen && fsHover && (
           <div
-            className="fs-hover-bar"
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 48,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.6), transparent)",
-              color: "#fff",
-              fontSize: 13,
-              cursor: "pointer",
-              zIndex: 50,
-              pointerEvents: "auto",
+            className={`fs-reveal-zone${fullscreenControlsVisible ? " visible" : ""}`}
+            onPointerEnter={() => setFullscreenControlsVisible(true)}
+            onPointerLeave={() => setFullscreenControlsVisible(false)}
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) setFullscreenControlsVisible(true);
             }}
-            onClick={() => setFullscreen(false)}
           >
-            <Icon name="maximize-2" size={14} />
-            Exit fullscreen
+            <button className="fs-hover-bar" onClick={() => setFullscreen(false)}>
+              <Icon name="maximize-2" size={14} />
+              Exit fullscreen
+            </button>
           </div>
         )}
 
